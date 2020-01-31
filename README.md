@@ -1,5 +1,7 @@
 # Unique Challenges for CTFd
 
+> **Not ready for production use**. This plugin is under active development as an independent study at UCCS.
+
 Compatible with CTFd v2.2.3
 
 When using CTF challenges in an academic environment, it provides some benefit to give each student
