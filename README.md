@@ -8,6 +8,8 @@ When using CTF challenges in an academic environment, it provides some benefit t
 a unique flag. This makes sharing answers easily detectable while still allowing students to work
 together in learning the material.
 
+When using this plugin, challenge visibility must be set to Private or Admins Only.
+
 This plugin provides two new challenge types.
 
 1. Unique - This challenge lets the content author use placeholders like `!flag_8!` to
