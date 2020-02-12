@@ -10,7 +10,20 @@ CTFd._internal.challenge.render = function (markdown) {
 }
 
 
-CTFd._internal.challenge.postRender = function () { }
+CTFd._internal.challenge.postRender = function () {
+    const challenge = $('#challenge-id').val();
+    $.ajax({
+        url: CTFd.config.urlRoot + "/api/unique/files/" + challenge,
+        success: function(response) {
+            for (const { name, id } of response.data) {
+                const template = $($('#unique-files-file-download')[0].content).clone();
+                template.find('a').attr('href', "/api/unique/files/" + challenge + "/" + id);
+                template.find('small').text(name);
+                $('.challenge-files').append(template);
+            }
+        }
+    });
+}
 
 
 CTFd._internal.challenge.submit = function (preview) {

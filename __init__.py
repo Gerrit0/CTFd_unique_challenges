@@ -13,9 +13,14 @@ from CTFd.models import (
 )
 from CTFd.utils.user import get_ip
 from CTFd.utils.uploads import delete_file
+from CTFd.utils.decorators import admins_only
 
-from .models import UniqueFlags, UniqueChallenges
+from flask import request, Blueprint
+from flask_restplus import Api
+
+from .models import UniqueFlags, UniqueChallenges, UniqueChallengeFiles
 from .helpers import get_unique_challenge_description, replace_submission
+from .api import api_namespace
 
 class UniqueChallenge(BaseChallenge):
     id = "unique"  # Unique identifier used to register challenges
@@ -74,6 +79,7 @@ class UniqueChallenge(BaseChallenge):
         files = ChallengeFiles.query.filter_by(challenge_id=challenge.id).all()
         for f in files:
             delete_file(f.id)
+        UniqueChallengeFiles.query.filter_by(challenge_id=challenge_id).delete()
 
         tables = [
             Fails,
@@ -108,7 +114,7 @@ class UniqueChallenge(BaseChallenge):
 
     @staticmethod
     def solve(user, team, challenge, request):
-        """Copied directly from the standard challenge. 
+        """Copied directly from the standard challenge.
         Nothing special here.
         """
         data = request.form or request.get_json()
@@ -147,3 +153,8 @@ def load(app):
     CHALLENGE_CLASSES["unique"] = UniqueChallenge
     register_plugin_assets_directory(
         app, base_path="/plugins/unique_challenges/assets/")
+
+    blueprint = Blueprint("unique_api", __name__)
+    api = Api(blueprint)
+    api.add_namespace(api_namespace, "/unique")
+    app.register_blueprint(blueprint, url_prefix="/api")

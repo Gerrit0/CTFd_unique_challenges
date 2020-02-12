@@ -5,6 +5,7 @@ from io import TextIOWrapper, BytesIO
 
 from CTFd.utils.user import get_current_user, get_current_team, is_admin
 from CTFd.utils import config
+from CTFd.models import db
 from flask import abort
 
 from .models import UniqueFlags
@@ -74,6 +75,22 @@ def get_unique_challenge_description(challenge):
         lambda match: username if match.group(0) == "!name!"
             else getattr(unique_flags, match.group(0)[1:-1]),
         challenge.description
+    )
+
+def get_unique_challenge_file(challenge, content):
+    """ Replaces placeholders in the given content for the current user
+    or returns the raw content if the user is an admin.
+    """
+    if is_admin():
+        return content
+    ensure_flags_for_challenge(challenge.id)
+    username = get_current_user().name
+    unique_flags = get_flags_for_challenge(challenge.id)
+    regex = re.compile(rb"!name!|!flag_8!|!flag_16!|!flag_32!")
+    return regex.sub(
+        lambda match: bytes(username, 'ascii') if match.group(0) == b"!name!"
+            else bytes(getattr(unique_flags, match.group(0)[1:-1].decode('utf-8')), 'ascii'),
+        content
     )
 
 def replace_submission(challenge, submission):

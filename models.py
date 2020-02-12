@@ -28,9 +28,28 @@ class UniqueFlags(db.Model):
     def __repr__(self):
         return f"<UniqueFlag {self.content} for challenge {self.challenge_id}>"
 
+
 class UniqueChallenges(Challenges):
     __mapper_args__ = {'polymorphic_identity': 'unique'}
     id = db.Column(None, db.ForeignKey('challenges.id'), primary_key=True)
 
     def __init__(self, *args, **kwargs):
         super(UniqueChallenges, self).__init__(**kwargs)
+
+
+class UniqueChallengeFiles(db.Model):
+    """ Represents a file whose contents will be replaced when a user downloads it.
+    """
+    __tablename__ = "unique_files"
+    id = db.Column(db.Integer, primary_key=True)
+    challenge_id = db.Column(
+        db.Integer, db.ForeignKey("challenges.id", ondelete="CASCADE")
+    )
+    name = db.Column(db.String(64))
+    content = db.Column(db.BLOB)
+
+    def __init__(self, *args, **kwargs):
+        super(UniqueChallengeFiles, self).__init__(**kwargs)
+
+    def __repr__(self):
+        return f"<UniqueChallengeFile {self.id} {self.name} for challenge {self.challenge_id}>"
