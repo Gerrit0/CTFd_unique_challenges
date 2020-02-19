@@ -1,6 +1,13 @@
+"""
+Registers the unique challenges plugin with CTFd.
+"""
+
+from flask import Blueprint
+from flask_restplus import Api
+
 from CTFd.plugins import register_plugin_assets_directory
 from CTFd.plugins.flags import get_flag_class
-from CTFd.plugins.challenges import CHALLENGE_CLASSES, BaseChallenge
+from CTFd.plugins.challenges import CHALLENGE_CLASSES, BaseChallenge, CTFdStandardChallenge
 from CTFd.models import (
     db,
     Solves,
@@ -15,14 +22,13 @@ from CTFd.utils.user import get_ip
 from CTFd.utils.uploads import delete_file
 from CTFd.utils.decorators import admins_only
 
-from flask import request, Blueprint
-from flask_restplus import Api
-
 from .models import UniqueFlags, UniqueChallenges, UniqueChallengeFiles
 from .helpers import get_unique_challenge_description, replace_submission
-from .api import api_namespace
+from .api import API_NAMESPACE
 
 class UniqueChallenge(BaseChallenge):
+    """ Defines a unique challenge type, where users will be given challenges
+    that contain unique flags per user/team. """
     id = "unique"  # Unique identifier used to register challenges
     name = "unique"  # Name of a challenge type
     templates = {  # Templates used for each aspect of challenge editing & viewing
@@ -38,6 +44,7 @@ class UniqueChallenge(BaseChallenge):
 
     @staticmethod
     def create(request):
+        """ Create a new unique challenge """
         data = request.form or request.get_json()
         challenge = UniqueChallenges(**data)
         db.session.add(challenge)
@@ -46,6 +53,7 @@ class UniqueChallenge(BaseChallenge):
 
     @staticmethod
     def read(challenge):
+        """ Read the challenge into a JSON-serializable object to send to the frontend """
         challenge = UniqueChallenges.query.filter_by(id=challenge.id).first()
         data = {
             "id": challenge.id,
@@ -67,6 +75,7 @@ class UniqueChallenge(BaseChallenge):
 
     @staticmethod
     def update(challenge, request):
+        """ Handle the challenge update request """
         data = request.form or request.get_json()
         for attr, value in data.items():
             setattr(challenge, attr, value)
@@ -76,10 +85,11 @@ class UniqueChallenge(BaseChallenge):
 
     @staticmethod
     def delete(challenge):
+        """ Handle the challenge delete request """
         files = ChallengeFiles.query.filter_by(challenge_id=challenge.id).all()
-        for f in files:
-            delete_file(f.id)
-        UniqueChallengeFiles.query.filter_by(challenge_id=challenge_id).delete()
+        for file in files:
+            delete_file(file.id)
+        UniqueChallengeFiles.query.filter_by(challenge_id=challenge.id).delete()
 
         tables = [
             Fails,
@@ -100,6 +110,7 @@ class UniqueChallenge(BaseChallenge):
 
     @staticmethod
     def attempt(challenge, request):
+        """ Called when a user tries to complete a challenge """
         data = request.form or request.get_json()
         cheating, submission = replace_submission(challenge, data["submission"].strip())
 
@@ -112,43 +123,12 @@ class UniqueChallenge(BaseChallenge):
                 return True, "Correct"
         return False, "Incorrect"
 
-    @staticmethod
-    def solve(user, team, challenge, request):
-        """Copied directly from the standard challenge.
-        Nothing special here.
-        """
-        data = request.form or request.get_json()
-        submission = data["submission"].strip()
-        solve = Solves(
-            user_id=user.id,
-            team_id=team.id if team else None,
-            challenge_id=challenge.id,
-            ip=get_ip(req=request),
-            provided=submission,
-        )
-        db.session.add(solve)
-        db.session.commit()
-        db.session.close()
-
-    @staticmethod
-    def fail(user, team, challenge, request):
-        """Copied directly from the standard challenge.
-        Nothing special here.
-        """
-        data = request.form or request.get_json()
-        submission = data["submission"].strip()
-        wrong = Fails(
-            user_id=user.id,
-            team_id=team.id if team else None,
-            challenge_id=challenge.id,
-            ip=get_ip(request),
-            provided=submission,
-        )
-        db.session.add(wrong)
-        db.session.commit()
-        db.session.close()
+    solve = CTFdStandardChallenge.solve
+    fail = CTFdStandardChallenge.fail
 
 def load(app):
+    """ Load the unique challenges plugin """
+
     app.db.create_all()
     CHALLENGE_CLASSES["unique"] = UniqueChallenge
     register_plugin_assets_directory(
@@ -156,5 +136,5 @@ def load(app):
 
     blueprint = Blueprint("unique_api", __name__)
     api = Api(blueprint)
-    api.add_namespace(api_namespace, "/unique")
+    api.add_namespace(API_NAMESPACE, "/unique")
     app.register_blueprint(blueprint, url_prefix="/api")

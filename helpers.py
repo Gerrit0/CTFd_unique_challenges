@@ -1,12 +1,14 @@
-import sys
+"""
+Contains helper functions for working with the challenge flags.
+"""
+
 import re
 from secrets import token_hex
-from io import TextIOWrapper, BytesIO
+from flask import abort
 
 from CTFd.utils.user import get_current_user, get_current_team, is_admin
 from CTFd.utils import config
 from CTFd.models import db
-from flask import abort
 
 from .models import UniqueFlags
 
@@ -27,6 +29,8 @@ def get_flags_for_challenge(challenge_id):
 
 
 def ensure_flags_for_challenge(challenge_id):
+    """ Makes sure that there is a flag for the given challenge
+    and current user. Will not create flags if the user is an admin. """
     # Admins don't get flags, their input is passed through without
     # replacement.
     if is_admin():
@@ -50,12 +54,12 @@ def ensure_flags_for_challenge(challenge_id):
 
     if not flags: # Missing, insert new flags
         flags = UniqueFlags(
-            challenge_id = challenge_id,
-            user_id = user.id if not config.is_teams_mode() else None,
-            team_id = get_current_team().id if config.is_teams_mode() else None,
-            flag_8 = token_hex(4),
-            flag_16 = token_hex(8),
-            flag_32 = token_hex(16)
+            challenge_id=challenge_id,
+            user_id=user.id if not config.is_teams_mode() else None,
+            team_id=get_current_team().id if config.is_teams_mode() else None,
+            flag_8=token_hex(4),
+            flag_16=token_hex(8),
+            flag_32=token_hex(16)
         )
         db.session.add(flags)
         db.session.commit()
@@ -73,7 +77,7 @@ def get_unique_challenge_description(challenge):
     regex = re.compile(r"!name!|!flag_8!|!flag_16!|!flag_32!")
     return regex.sub(
         lambda match: username if match.group(0) == "!name!"
-            else getattr(unique_flags, match.group(0)[1:-1]),
+        else getattr(unique_flags, match.group(0)[1:-1]),
         challenge.description
     )
 
@@ -89,7 +93,7 @@ def get_unique_challenge_file(challenge, content):
     regex = re.compile(rb"!name!|!flag_8!|!flag_16!|!flag_32!")
     return regex.sub(
         lambda match: bytes(username, 'ascii') if match.group(0) == b"!name!"
-            else bytes(getattr(unique_flags, match.group(0)[1:-1].decode('utf-8')), 'ascii'),
+        else bytes(getattr(unique_flags, match.group(0)[1:-1].decode('utf-8')), 'ascii'),
         content
     )
 
@@ -119,25 +123,3 @@ def replace_submission(challenge, submission):
     }
     regex = re.compile("|".join(map(re.escape, replacements)))
     return False, regex.sub(lambda match: replacements[match.group(0)], submission)
-
-
-class CaptureExec:
-    """ Helper class to wrap user scripts that print to stdout.
-    """
-
-    def __init__(self, script):
-        self._script = script
-
-    def run(self, extra_script="", local_vars={}):
-        # Setup, capture stdout
-        old, sys.stdout = sys.stdout, TextIOWrapper(
-            BytesIO(), sys.stdout.encoding)
-        # Run user script, note that builtins are enabled. Untrusted input
-        # should not be passed to this function.
-        exec("{}\n{}".format(self._script, extra_script), {}, local_vars)
-        # Get the output
-        sys.stdout.seek(0)
-        out = sys.stdout.read()
-        sys.stdout.close()
-        sys.stdout = old
-        return out

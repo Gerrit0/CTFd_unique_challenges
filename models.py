@@ -1,6 +1,8 @@
-from CTFd.models import db, Challenges
+"""
+Contains all of the models added by this plugin.
+"""
 
-# TODO: Unique challenge files
+from CTFd.models import db, Challenges
 
 class UniqueFlags(db.Model):
     """ Unlike the standard flags, each unique challenge gets a set of three unique flags.
@@ -22,19 +24,15 @@ class UniqueFlags(db.Model):
     flag_16 = db.Column(db.String(16))
     flag_32 = db.Column(db.String(32))
 
-    def __init__(self, *args, **kwargs):
-        super(UniqueFlags, self).__init__(**kwargs)
-
     def __repr__(self):
         return f"<UniqueFlag {self.content} for challenge {self.challenge_id}>"
 
 
 class UniqueChallenges(Challenges):
+    """ Required for CTFd, even though there is no difference from the standard challenge.
+    """
     __mapper_args__ = {'polymorphic_identity': 'unique'}
     id = db.Column(None, db.ForeignKey('challenges.id'), primary_key=True)
-
-    def __init__(self, *args, **kwargs):
-        super(UniqueChallenges, self).__init__(**kwargs)
 
 
 class UniqueChallengeFiles(db.Model):
@@ -47,9 +45,6 @@ class UniqueChallengeFiles(db.Model):
     )
     name = db.Column(db.String(64))
     content = db.Column(db.BLOB)
-
-    def __init__(self, *args, **kwargs):
-        super(UniqueChallengeFiles, self).__init__(**kwargs)
 
     def __repr__(self):
         return f"<UniqueChallengeFile {self.id} {self.name} for challenge {self.challenge_id}>"
