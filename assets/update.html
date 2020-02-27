@@ -1,78 +1,90 @@
+<script src="https://pagecdn.io/lib/ace/1.4.8/ace.js" crossorigin="anonymous" integrity="sha256-+svOVB1WmhKhTy7N21gWvtyXn91qF0r52P2hIArRRug=" ></script>
+<style type="text/css" media="screen">
+    #script-editor {
+        width: 100%;
+        height: 300px;
+    }
+    #script_filesboard .highlight {
+        box-shadow: inset 0 0 20px #ff0;
+    }
+</style>
+
+
 <form method="POST">
-	<div class="form-group">
-		<label>
-			Name<br>
-			<small class="form-text text-muted">Challenge Name</small>
-		</label>
-		<input type="text" class="form-control chal-name" name="name" value="{{ challenge.name }}">
-	</div>
+    <div class="form-group">
+        <label>
+            Name<br>
+            <small class="form-text text-muted">Challenge Name</small>
+        </label>
+        <input type="text" class="form-control chal-name" name="name" value="{{ challenge.name }}">
+    </div>
 
-	<div class="form-group">
-		<label>
-			Category<br>
-			<small class="form-text text-muted">Challenge Category</small>
-		</label>
-		<input type="text" class="form-control chal-category" name="category" value="{{ challenge.category }}">
-	</div>
+    <div class="form-group">
+        <label>
+            Category<br>
+            <small class="form-text text-muted">Challenge Category</small>
+        </label>
+        <input type="text" class="form-control chal-category" name="category" value="{{ challenge.category }}">
+    </div>
 
-	<div class="form-group">
-		<label>
-			Message<br>
-			<small class="form-text text-muted">
-				Use this to give a brief introduction to your challenge.<br>
-				You may include the placeholders <code>!name!</code>, <code>!flag_8!</code>, <code>!flag_16!</code>, and <code>!flag_32!</code>
-				which will be replaced with the team (or user) name, and the corresponding unique flag for that user.
-			</small>
-		</label>
-		<textarea id="desc-editor" class="form-control chal-desc-editor" name="description" rows="10">{{ challenge.description }}</textarea>
-	</div>
+    <div class="form-group">
+        <label>
+            Message<br>
+            <small class="form-text text-muted">
+                Use this to give a brief introduction to your challenge.<br>
+                You may include the placeholders <code>!name!</code>, <code>!flag_8!</code>, <code>!flag_16!</code>, and <code>!flag_32!</code>
+                which will be replaced with the team (or user) name, and the corresponding unique flag for that user.
+            </small>
+        </label>
+        <textarea id="desc-editor" class="form-control chal-desc-editor" name="description" rows="10">{{ challenge.description }}</textarea>
+    </div>
 
-	<div class="form-group">
-		<label for="value">
-			Value<br>
-			<small class="form-text text-muted">
-				This is how many points teams will receive once they solve this challenge.
-			</small>
-		</label>
-		<input type="number" class="form-control chal-value" name="value" value="{{ challenge.value }}" required>
-	</div>
+    <div class="form-group">
+        <label for="value">
+            Value<br>
+            <small class="form-text text-muted">
+                This is how many points teams will receive once they solve this challenge.
+            </small>
+        </label>
+        <input type="number" class="form-control chal-value" name="value" value="{{ challenge.value }}" required>
+    </div>
 
-	<div class="form-group">
-		<label>
-			Max Attempts<br>
-			<small class="form-text text-muted">Maximum amount of attempts users receive. Leave at 0 for unlimited.</small>
-		</label>
+    <div class="form-group">
+        <label>
+            Max Attempts<br>
+            <small class="form-text text-muted">Maximum amount of attempts users receive. Leave at 0 for unlimited.</small>
+        </label>
 
-		<input type="number" class="form-control chal-attempts" name="max_attempts" value="{{ challenge.max_attempts }}">
-	</div>
+        <input type="number" class="form-control chal-attempts" name="max_attempts" value="{{ challenge.max_attempts }}">
+    </div>
 
-	<div class="form-group">
-		<label>
-			State<br>
-			<small class="form-text text-muted">Changes the state of the challenge (e.g. visible, hidden)</small>
-		</label>
+    <div class="form-group">
+        <label>
+            State<br>
+            <small class="form-text text-muted">Changes the state of the challenge (e.g. visible, hidden)</small>
+        </label>
 
-		<select class="form-control custom-select" name="state">
-			<option value="visible" {% if challenge.state == "visible" %}selected{% endif %}>Visible</option>
-			<option value="hidden" {% if challenge.state == "hidden" %}selected{% endif %}>Hidden</option>
-		</select>
-	</div>
+        <select class="form-control custom-select" name="state">
+            <option value="visible" {% if challenge.state == "visible" %}selected{% endif %}>Visible</option>
+            <option value="hidden" {% if challenge.state == "hidden" %}selected{% endif %}>Hidden</option>
+        </select>
+    </div>
 
-	<div>
-		<button class="btn btn-success btn-outlined float-right" type="submit">
-			Update
-		</button>
-	</div>
+    <div>
+        <button class="btn btn-success btn-outlined float-right" type="submit">
+            Update
+        </button>
+    </div>
 </form>
 
-<template id="unique-files-file-row">
-	<tr>
-		<td class="text-center">
-			<a href=""></a>
-		</td>
+<template id="file-row-template">
+    <tr>
+        <td class="text-center">
+            <a href=""></a>
+        </td>
 
-		<td class="text-center">
-			<i role="button" file-id="?" class="btn-fa fas fa-times delete-file"></i>
-		</td>
-	</tr>
+        <td class="text-center">
+            <i role="button" file-id="?" class="btn-fa fas fa-times delete-file"></i>
+        </td>
+    </tr>
 </template>

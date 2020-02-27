@@ -48,3 +48,15 @@ class UniqueChallengeFiles(db.Model):
 
     def __repr__(self):
         return f"<UniqueChallengeFile {self.id} {self.name} for challenge {self.challenge_id}>"
+
+class UniqueChallengeScript(db.Model):
+    """ Represents a python script provided by an administrator that will use the placeholders
+    to generate a file for a given user.
+    """
+    __tablename__ = "unique_scripts"
+    id = db.Column(db.Integer, primary_key=True)
+    challenge_id = db.Column(
+        db.Integer, db.ForeignKey("challenges.id", ondelete="CASCADE")
+    )
+    name = db.Column(db.String(64))
+    script = db.Column(db.BLOB)

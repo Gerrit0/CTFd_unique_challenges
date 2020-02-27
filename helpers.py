@@ -2,6 +2,8 @@
 Contains helper functions for working with the challenge flags.
 """
 
+import sys
+from io import TextIOWrapper, BytesIO
 import re
 from secrets import token_hex
 from flask import abort
@@ -14,8 +16,8 @@ from .models import UniqueFlags
 
 
 def get_flags_for_challenge(challenge_id):
-    """ Assumes the user is not an admin and
-    ensure_flags_for_challenge has been called first."""
+    """ Assumes the user already has unique flags created by
+    ensure_flags_for_challenge."""
     if config.is_teams_mode():
         return UniqueFlags.query.filter_by(
             challenge_id=challenge_id,
@@ -28,12 +30,12 @@ def get_flags_for_challenge(challenge_id):
         ).first()
 
 
-def ensure_flags_for_challenge(challenge_id):
+def ensure_flags_for_challenge(challenge_id, also_admins=False):
     """ Makes sure that there is a flag for the given challenge
-    and current user. Will not create flags if the user is an admin. """
+    and current user. Will not create flags if the user is an admin unless also_admins is true. """
     # Admins don't get flags, their input is passed through without
     # replacement.
-    if is_admin():
+    if is_admin() and not also_admins:
         return
     user = get_current_user()
     if not user:
@@ -123,3 +125,42 @@ def replace_submission(challenge, submission):
     }
     regex = re.compile("|".join(map(re.escape, replacements)))
     return False, regex.sub(lambda match: replacements[match.group(0)], submission)
+
+class CaptureExec:
+    """ Helper class to wrap user scripts that print to stdout.
+    """
+    def __init__(self, script: str):
+        self._script = script
+
+    def run(self, local_vars={}) -> str:
+        # Setup, capture stdout
+        old, sys.stdout = sys.stdout, TextIOWrapper(
+            BytesIO(), sys.stdout.encoding)
+        # Run user script, note that builtins are enabled. Untrusted input
+        # should not be passed to this function.
+        try:
+            exec(self._script, {}, local_vars)
+        except Exception as e:
+            print("ERROR CREATING FILE: CONTACT AN ADMINISTRATOR")
+            print("Exception when running admin code to generate a file:", file=sys.stderr)
+            print(e, file=sys.stderr)
+        # Get the output
+        sys.stdout.seek(0)
+        out = sys.stdout.read()
+        sys.stdout.close()
+        sys.stdout = old
+        return out
+
+def get_generated_challenge_file(challenge, script: str) -> bytes:
+    """ Calls an administrator provided script to generate content for the given user"""
+    # Even admins get flags for challenge files... There's a separate route for editing.
+    ensure_flags_for_challenge(challenge.id, True)
+    flags = get_flags_for_challenge(challenge.id)
+    placeholders = dict(
+        flag_8=flags.flag_8,
+        flag_16=flags.flag_16,
+        flag_32=flags.flag_32,
+        name=get_current_user().name
+    )
+    capture = CaptureExec(script)
+    return bytes(capture.run(dict(PLACEHOLDERS=placeholders)), 'utf-8')

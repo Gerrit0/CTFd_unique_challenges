@@ -14,7 +14,6 @@ $('#nav-tabContent').append(`
                     </tr>
                 </thead>
                 <tbody>
-                    <!-- TODO: Include file infos -->
                 </tbody>
             </table>
             <div class="col-md-12 mt-3">
@@ -29,6 +28,48 @@ $('#nav-tabContent').append(`
                     </div>
                     <div class="form-group">
                         <button class="btn btn-success float-right" id="submit-unique-files">Upload</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>`);
+
+$('#challenge-properties').append('<a class="nav-item nav-link" data-toggle="tab" href="#unique_scripts" role="tab">Script Files</a>');
+$('#nav-tabContent').append(`
+<div class="tab-pane fade" id="unique_scripts" role="tabpanel">
+    <div class="row">
+        <div class="col-md-12">
+            <h3 class="text-center py-3 d-block">Script Files</h3>
+            <table id="script_filesboard" class="table table-striped">
+                <thead>
+                    <tr>
+                        <td class="text-center"><b>File</b></td>
+                        <td class="text-center"><b>Settings</b></td>
+                    </tr>
+                </thead>
+                <tbody>
+                </tbody>
+            </table>
+            <div class="col-md-12 mt-3">
+                <form id="script-file-add-form" method="POST">
+                    <div class="form-group">
+                        <label>
+                            File name:
+                            <input class="form-control" name="name" id="script-file-name">
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <div id="script-editor"></div>
+                        <sub>
+                            The code you provide will be run with Python3. PLACEHOLDERS will be a dict
+                            with the keys <code>flag_8</code>, <code>flag_16</code>, <code>flag_32</code>, and <code>name</code>.
+                            Output to standard out will be presented to the user as a file.
+                        </sub>
+                    </div>
+                    <div class="form-group">
+                        <button class="btn btn-success float-right" id="submit-script-files">Create</button>
+                        <input type="hidden" name="id" id="script-file-id">
                     </div>
                 </form>
             </div>
@@ -61,7 +102,7 @@ $('#nav-tabContent').append(`
     }
 
     function addFile(name, id) {
-        const template = $($('#unique-files-file-row')[0].content).clone();
+        const template = $($('#file-row-template')[0].content).clone();
         template.find('a').text(name)
             .attr('href', '/api/unique/files/' + CHALLENGE_ID + '/' + id);
         template.find('i').attr('file-id', id);
@@ -106,4 +147,100 @@ $('#nav-tabContent').append(`
             });
         }
     })
+
+    /// Script editor ///
+    const editor = ace.edit("script-editor");
+    editor.session.setMode("ace/mode/python");
+
+    function clearSelectedScript() {
+        $('.highlight[gf-id]').removeClass('highlight')
+        editor.setValue('')
+        $('#script-file-id').val('')
+        $('#script-file-name').val('')
+        $('#submit-script-files').text('Create')
+    }
+
+    function addScriptFile(name, id) {
+        const template = $($('#file-row-template')[0].content).clone();
+        template.find('tr').attr('gf-id', id)
+        template.find('a').text(name).click(function(event) {
+            event.preventDefault()
+            const row = $('[gf-id=' + id + ']')
+            if (row.hasClass('highlight')) {
+                clearSelectedScript()
+            } else {
+                clearSelectedScript()
+                row.addClass('highlight')
+                $.ajax({
+                    url: CTFd.config.urlRoot + "/api/unique/generated-files/" + CHALLENGE_ID + "/" + id,
+                    data: { nonce: CTFd.config.csrfNonce },
+                    success: function(response) {
+                        if (!row.hasClass('highlight')) return;
+                        editor.setValue(response.script || '')
+                        $('#script-file-name').val(response.name)
+                        $('#script-file-id').attr('value', response.id)
+                        $('#submit-script-files').text('Update')
+                    }
+                })
+            }
+
+        });
+        template.find('i').attr('file-id', id);
+        $('#script_filesboard tbody').append(template);
+    }
+
+    // Load existing files
+    $.ajax({
+        url: CTFd.config.urlRoot + "/api/unique/generated-files/" + CHALLENGE_ID,
+        success: function(response) {
+            for (const { name, id } of response.data) {
+                addScriptFile(name, id);
+            }
+        }
+    });
+
+    // Creating / updating script files
+    $('#script-file-add-form').submit(function(event) {
+        event.preventDefault();
+        const form = event.target;
+
+        $.ajax({
+            url: CTFd.config.urlRoot + "/api/unique/generated-files",
+            type: 'POST',
+            data: {
+                nonce: CTFd.config.csrfNonce,
+                challenge: CHALLENGE_ID,
+                id: $('#script-file-id').val(),
+                name: $('#script-file-name').val(),
+                script: editor.getValue()
+            },
+            success: function(response) {
+                if (response.created) {
+                    addScriptFile(response.name, response.id)
+                } else {
+                    $('[gf-id=' + response.id + '] a').text(response.name)
+                }
+            }
+        })
+    });
+
+    // Deleting script files
+    $('#script_filesboard tbody').click(function (event) {
+        const target = $(event.target);
+        const id = target.attr('file-id');
+        if (id) {
+            $.ajax({
+                url: CTFd.config.urlRoot + "/api/unique/generated-files/" + CHALLENGE_ID + "/" + id,
+                type: 'DELETE',
+                data: { nonce: CTFd.config.csrfNonce },
+                success: function(response) {
+                    if ($('#script-file-id').val() == id) {
+                        clearSelectedScript()
+                    }
+                    target.parent().parent().remove()
+                }
+            });
+        }
+    })
+
 }())
