@@ -10,12 +10,10 @@ together in learning the material.
 
 When using this plugin, challenge visibility must be set to Private or Admins Only.
 
-This plugin provides two new challenge types.
-
-1. Unique - This challenge lets the content author use placeholders like `!flag_8!` to
-  insert a dynamic value for each CTF user/team in the challenge description or downloadable text file.
-1. Unique Programmable - This challenge lets the content author write two generic Python 3 functions to
-  generate the flag for a given user and the corresponding challenge. The 
+This plugin provides a new challenge type - unique. This challenge type lets the content author
+use placeholders like `!flag_8!` to insert a dynamic value for each CTF user/team in the
+challenge description or downloadable text file. It also allows administrators to write
+Python 3 scripts that will be passed the placeholders to generate a downloadable text file.
 
 ## Installation
 
