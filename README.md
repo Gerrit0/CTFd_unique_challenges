@@ -22,3 +22,16 @@ cd /path/to/CTFd/plugins
 git clone git@github.com:Gerrit0/CTFd_unique_challenges.git unique_challenges
 ```
 
+### Setup Script
+
+To quickly set up a CTFd development server with this plugin installed, run the following commands
+
+```bash
+python3 -m venv env
+source env/bin/activate
+git clone https://github.com/CTFd/CTFd.git
+cd CTFd
+pip install -r requirements.txt
+git clone git@github.com:Gerrit0/CTFd_unique_challenges.git CTFd/plugins/unique_challenges
+python serve.py
+```
