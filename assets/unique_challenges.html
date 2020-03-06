@@ -1,0 +1,38 @@
+{% extends "admin/base.html" %}
+
+{% block content %}
+
+<div class="jumbotron">
+    <div class="container">
+        <h1>Unique Challenges</h1>
+    </div>
+</div>
+
+<div class="container">
+    <h3>Settings</h3>
+
+    <form id="unique_challenges_config_form">
+        <div class="form-group form-check">
+            {% if filter_list %}
+            <input type="checkbox" name="filter_list" id="filter_list" checked>
+            {% else %}
+            <input type="checkbox" name="filter_list" id="filter_list">
+            {% endif %}
+            <label for="filter_list">Apply advanced requirements when listing challenges</label>
+            <br>
+            <small class="form-text text-muted">
+                This may cause performance issues with CTFs with many challenges. <br>
+                If not set, advanced requirements will be applied when a user views a challenge.
+            </small>
+        </div>
+
+        <input value="{{ nonce }}" name="nonce" hidden>
+        <button type="submit" class="btn btn-primary" id="config_form_submit">Save</button>
+    </form>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="/plugins/unique_challenges/assets/unique_challenges.js" defer></script>
+{% endblock %}

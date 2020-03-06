@@ -7,12 +7,13 @@ import io
 from flask import request, send_file, abort
 from flask_restplus import Namespace, Resource
 from CTFd.models import db
+from CTFd.utils import set_config
 from CTFd.utils.decorators import admins_only
 from CTFd.utils.dates import ctftime
 from CTFd.utils.user import is_admin
 
-from .models import UniqueChallengeFiles, UniqueChallenges, UniqueChallengeScript
-from .helpers import get_unique_challenge_file, get_generated_challenge_file
+from .models import UniqueChallengeFiles, UniqueChallenges, UniqueChallengeScript, UniqueChallengeRequirements
+from .helpers import get_unique_challenge_file, get_generated_challenge_file, meets_advanced_requirements
 from .lispish import LispIsh, LispIshParseError
 
 API_NAMESPACE = Namespace("unique", description="API endpoint for unique challenges")
@@ -50,6 +51,8 @@ class ChallengeFiles(Resource):
         """ Handle the get request """
         if not is_admin() and not ctftime():
             abort(403)
+        if not meets_advanced_requirements(challenge_id):
+            return dict(success=True, data=[])
         files = UniqueChallengeFiles.query.filter_by(challenge_id=challenge_id).all()
         return {
             "success": True,
@@ -64,6 +67,8 @@ class ChallengeFile(Resource):
     def get(self, challenge_id, file_id):
         """ Handle the get request """
         if not is_admin() and not ctftime():
+            abort(403)
+        if not meets_advanced_requirements(challenge_id):
             abort(403)
 
         challenge = UniqueChallenges.query.filter_by(id=challenge_id).first_or_404()
@@ -120,6 +125,8 @@ class GeneratedChallengeFiles(Resource):
         """ Handle the get request """
         if not is_admin() and not ctftime():
             abort(403)
+        if not meets_advanced_requirements(challenge_id):
+            return dict(success=True, data=[])
         files = UniqueChallengeScript.query.filter_by(challenge_id=challenge_id).all()
         return {
             "success": True,
@@ -155,6 +162,8 @@ class GeneratedChallengeFileDownload(Resource):
         """ Handle the get request """
         if not is_admin() or not ctftime():
             abort(403)
+        if not meets_advanced_requirements(challenge_id):
+            return abort(403)
         challenge = UniqueChallenges.query.filter_by(id=challenge_id).first_or_404()
         file = (UniqueChallengeScript.query.filter_by(challenge_id=challenge_id, id=file_id)
                 .first_or_404())
@@ -164,6 +173,47 @@ class GeneratedChallengeFileDownload(Resource):
             as_attachment=True,
             mimetype='application/octet-stream'
         )
+
+@API_NAMESPACE.route("/requirements/<challenge_id>")
+@API_NAMESPACE.param("challenge_id", "A challenge ID")
+class UniqueChallengeRequirementsResource(Resource):
+    @admins_only
+    def get(self, challenge_id):
+        """ Get the script for editing """
+        requirement = UniqueChallengeRequirements.query.filter_by(challenge_id=challenge_id).first()
+        return {
+            'status': 'ok',
+            'script': requirement.script.decode('utf-8') if requirement else ''
+        }
+
+    @admins_only
+    def post(self, challenge_id):
+        """ Save the given requirements """
+        requirement = UniqueChallengeRequirements.query.filter_by(challenge_id=challenge_id).first()
+        if not requirement:
+            requirement = UniqueChallengeRequirements(challenge_id=challenge_id)
+            db.session.add(requirement)
+
+        data = request.form or request.get_json()
+        script = data.get('script')
+        if script is None or script == '':
+            script = ''
+        else:
+            try:
+                script = LispIsh().parse(script).emit()
+            except LispIshParseError as error:
+                return dict(status='error', error=str(error))
+        requirement.script = bytes(script, 'utf-8')
+        db.session.commit()
+        return dict(status='ok', script=requirement.script.decode('utf-8'))
+
+@API_NAMESPACE.route("/config")
+class UniqueChallengesConfig(Resource):
+    @admins_only
+    def post(self):
+        data = request.form or request.get_json()
+        set_config("unique_challenges_filter_list", bool(data.get("filter_list")))
+        return dict(status='ok')
 
 @API_NAMESPACE.route("/lispish/parse")
 class LispIshData(Resource):

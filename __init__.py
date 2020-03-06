@@ -2,7 +2,7 @@
 Registers the unique challenges plugin with CTFd.
 """
 
-from flask import Blueprint
+from flask import Blueprint, render_template
 from flask_restplus import Api
 
 from CTFd.plugins import register_plugin_assets_directory
@@ -18,12 +18,13 @@ from CTFd.models import (
     Tags,
     Hints,
 )
+from CTFd.utils import get_config
 from CTFd.utils.user import get_ip
 from CTFd.utils.uploads import delete_file
 from CTFd.utils.decorators import admins_only
 
 from .models import UniqueFlags, UniqueChallenges, UniqueChallengeFiles
-from .helpers import get_unique_challenge_description, replace_submission
+from .helpers import get_unique_challenge_description, replace_submission, meets_advanced_requirements
 from .api import API_NAMESPACE
 
 class UniqueChallenge(BaseChallenge):
@@ -54,6 +55,7 @@ class UniqueChallenge(BaseChallenge):
     @staticmethod
     def read(challenge):
         """ Read the challenge into a JSON-serializable object to send to the frontend """
+        # Advanced requirements don't need to be handled here. They are handled by the overwritten route.
         challenge = UniqueChallenges.query.filter_by(id=challenge.id).first()
         data = {
             "id": challenge.id,
@@ -114,6 +116,9 @@ class UniqueChallenge(BaseChallenge):
         data = request.form or request.get_json()
         cheating, submission = replace_submission(challenge, data["submission"].strip())
 
+        if not meets_advanced_requirements(challenge.id):
+            return False, "Missing requirements"
+
         if cheating:
             return False, "Incorrect"
 
@@ -134,7 +139,42 @@ def load(app):
     register_plugin_assets_directory(
         app, base_path="/plugins/unique_challenges/assets/")
 
-    blueprint = Blueprint("unique_api", __name__)
-    api = Api(blueprint)
+    api_blueprint = Blueprint("unique_api", __name__)
+    plugin_blueprint = Blueprint("unique_plugin", __name__, template_folder="assets")
+
+    @plugin_blueprint.route("/admin/unique_challenges")
+    @admins_only
+    def configure_route():
+        return render_template(
+            "unique_challenges.html",
+            filter_list=get_config("unique_challenges_filter_list", False)
+        )
+
+    api = Api(api_blueprint)
     api.add_namespace(API_NAMESPACE, "/unique")
-    app.register_blueprint(blueprint, url_prefix="/api")
+    app.register_blueprint(api_blueprint, url_prefix="/api")
+    app.register_blueprint(plugin_blueprint)
+
+    # Overwrite /api/v1/challenges
+    old_challenges_list = app.view_functions['api.challenges_challenge_list']
+    def challenges_list(*args, **kwargs):
+        result = old_challenges_list(*args, **kwargs)
+        if get_config("unique_challenges_filter_list", False):
+            result.json['data'] = [
+                challenge for challenge in result.json['data'] if meets_advanced_requirements(challenge['id'])
+            ]
+            return result.json
+        return result
+    app.view_functions['api.challenges_challenge_list'] = challenges_list
+
+    # Overwrite /api/v1/challenges/<challenge_id>
+    old_challenges_view = app.view_functions['api.challenges_challenge']
+    def challenges_view(*args, **kwargs):
+        result = old_challenges_view(*args, **kwargs)
+        if not meets_advanced_requirements(result.json['data']['id']):
+            result.json['data']['state'] = 'missing-requirements'
+            result.json['data']['description'] = "You don't meet the requirements to complete this challenge."
+            result.json['data']['files'] = None
+            return result.json
+        return result
+    app.view_functions['api.challenges_challenge'] = challenges_view

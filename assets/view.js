@@ -11,6 +11,11 @@ CTFd._internal.challenge.render = function (markdown) {
 
 
 CTFd._internal.challenge.postRender = function () {
+    if (CTFd._internal.challenge.data.state === 'missing-requirements') {
+        CTFd.lib.$('#submission-input').attr('disabled', true)
+        CTFd.lib.$('#submit-key').attr('disabled', true)
+    }
+
     const challenge = $('#challenge-id').val();
     $.ajax({
         url: CTFd.config.urlRoot + "/api/unique/files/" + challenge,

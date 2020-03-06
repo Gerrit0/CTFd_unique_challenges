@@ -10,9 +10,10 @@ from flask import abort
 
 from CTFd.utils.user import get_current_user, get_current_team, is_admin
 from CTFd.utils import config
-from CTFd.models import db
+from CTFd.models import db, Solves, Challenges
 
-from .models import UniqueFlags
+from .lispish import LispIsh, LispIshParseError, LispIshRuntimeError
+from .models import UniqueFlags, UniqueChallengeRequirements
 
 
 def get_flags_for_challenge(challenge_id):
@@ -164,3 +165,72 @@ def get_generated_challenge_file(challenge, script: str) -> bytes:
     )
     capture = CaptureExec(script)
     return bytes(capture.run(dict(PLACEHOLDERS=placeholders)), 'utf-8')
+
+def has_solved(challenge_id: int, user=None) -> bool:
+    """ Checks if the given user has solved a challenge """
+    solve = Solves.query.filter_by(
+        account_id=user.account_id if user else get_current_user().account_id,
+        challenge_id=challenge_id
+    ).first()
+    return bool(solve)
+
+def meets_advanced_requirements(challenge_id: int, user=None) -> bool:
+    """ Checks if the given user meets the advanced requirements for a challenge """
+    model = UniqueChallengeRequirements.query.filter_by(challenge_id=challenge_id).first()
+    if user is None:
+        user = get_current_user()
+    if not model or not model.script or user.type == "admin":
+        # No requirements present = always allowed
+        return True
+
+    def completed(arg) -> bool:
+        for search in arg:
+            if isinstance(search, str):
+                challenge = Challenges.query.filter_by(name=search).first()
+                if not challenge or not has_solved(challenge.id, user):
+                    return False
+            elif not has_solved(search, user):
+                return False
+        return True
+
+    def before(arg, method='before') -> bool:
+        if len(arg) != 1:
+            raise LispIshRuntimeError(f"({method}) function was passed {len(arg)} arguments, expected 1.")
+        if isinstance(arg[0], int):
+            return time.time() < arg[0]
+        try:
+            timestamp = time.strptime(str(arg[0]), "%Y-%m-%d")
+            return time.time() < time.mktime(timestamp)
+        except ValueError:
+            pass
+        try:
+            timestamp = time.strptime(str(arg[0]), "%Y-%m-%d %H:%M")
+            return time.time() < time.mktime(timestamp)
+        except ValueError:
+            raise LispIshRuntimeError(f"({method}) function was passed an invalid date string, expected an integer or a string with format YYYY-MM-DD or YYYY-MM-DD HH:MM")
+
+    def after(arg) -> bool:
+        return not before(arg, 'after')
+
+    def notFn(arg) -> bool:
+        if len(arg) != 1:
+            raise LispIshRuntimeError(f"(not) function was passed {len(arg)} arguments, expected 1.")
+        return not arg[0]
+
+    lisp = LispIsh()
+    try:
+        method = lisp.parse(model.script.decode('utf-8'))
+        return method.evaluate({
+            'COMPLETED': completed,
+            'AND': all,
+            'OR': any,
+            'NOT': notFn,
+            'BEFORE': before,
+            'AFTER': after,
+        })
+    except LispIshParseError as err:
+        print(f"Error parsing LispIsh: {err}")
+        return False
+    except LispIshRuntimeError as err:
+        print(f"Error evaluating LispIsh: {err}")
+        return False

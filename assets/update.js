@@ -77,6 +77,29 @@ $('#nav-tabContent').append(`
     </div>
 </div>`);
 
+$('#challenge-properties').append('<a class="nav-item nav-link" data-toggle="tab" href="#advanced_requirements" role="tab">Advanced Requirements</a>');
+$('#nav-tabContent').append(`
+<div class="tab-pane fade" id="advanced_requirements" role="tabpanel">
+    <div class="row">
+        <div class="col-md-12">
+            <h3 class="text-center py-3 d-block">Advanced Requirements</h3>
+            <div class="col-md-12 mt-3">
+                <form id="advanced-requirements-form" method="POST">
+                    <div class="form-group">
+                        <div id="requirements-editor"></div>
+                        <sub>
+                            LispIsh description
+                        </sub>
+                    </div>
+                    <div class="form-group">
+                        <button class="btn btn-success float-right" id="submit-advanced-requirements">Save</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>`);
+
 (function () {
     // Derived from core/assets/js/helpers.js upload
     function upload(form, extra, cb) {
@@ -243,4 +266,34 @@ $('#nav-tabContent').append(`
         }
     })
 
+    /// Advanced Requirements
+    const reqEditor = ace.edit("requirements-editor");
+    reqEditor.session.setMode("ace/mode/lisp");
+
+    $.ajax({
+        url: CTFd.config.urlRoot + "/api/unique/requirements/" + CHALLENGE_ID,
+        success: function(response) {
+            reqEditor.setValue(response.script)
+        }
+    })
+
+    $('#advanced-requirements-form').submit(function(event) {
+        event.preventDefault();
+
+        $.ajax({
+            url: CTFd.config.urlRoot + "/api/unique/requirements/" + CHALLENGE_ID,
+            type: 'POST',
+            data: {
+                nonce: CTFd.config.csrfNonce,
+                script: reqEditor.getValue()
+            },
+            success: function(response) {
+                if (response.status == 'ok') {
+                    reqEditor.setValue(response.script)
+                } else {
+                    alert(response.error)
+                }
+            }
+        })
+    });
 }())

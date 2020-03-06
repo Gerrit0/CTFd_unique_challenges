@@ -60,3 +60,14 @@ class UniqueChallengeScript(db.Model):
     )
     name = db.Column(db.String(64))
     script = db.Column(db.BLOB)
+
+class UniqueChallengeRequirements(db.Model):
+    """ Represents a LispIsh script provided by an administrator that determines
+    if the given challenge can be completed by a user.
+    """
+    __tablename__ = "unique_requirements"
+    id = db.Column(db.Integer, primary_key=True)
+    challenge_id = db.Column(
+        db.Integer, db.ForeignKey("challenges.id", ondelete="CASCADE")
+    )
+    script = db.Column(db.BLOB)
