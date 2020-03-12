@@ -190,8 +190,11 @@ def meets_advanced_requirements(challenge_id: int, user=None) -> bool:
                 challenge = Challenges.query.filter_by(name=search).first()
                 if not challenge or not has_solved(challenge.id, user):
                     return False
-            elif not has_solved(search, user):
-                return False
+            elif isinstance(search, int):
+                if not has_solved(search, user):
+                    return False
+            else:
+                raise LispIshRuntimeError(f"(completed) function was passed an argument that was not a string or int.")
         return True
 
     def before(arg, method='before') -> bool:
@@ -213,21 +216,17 @@ def meets_advanced_requirements(challenge_id: int, user=None) -> bool:
     def after(arg) -> bool:
         return not before(arg, 'after')
 
-    def notFn(arg) -> bool:
-        if len(arg) != 1:
-            raise LispIshRuntimeError(f"(not) function was passed {len(arg)} arguments, expected 1.")
-        return not arg[0]
-
     lisp = LispIsh()
     try:
         method = lisp.parse(model.script.decode('utf-8'))
         return method.evaluate({
             'COMPLETED': completed,
-            'AND': all,
-            'OR': any,
-            'NOT': notFn,
             'BEFORE': before,
             'AFTER': after,
+            'USER-EMAIL': lambda _: user.email,
+            'USER-NAME': lambda _: user.name,
+            'USER-ID': lambda _: user.id,
+            'USER-SCORE': lambda _: user.score,
         })
     except LispIshParseError as err:
         print(f"Error parsing LispIsh: {err}")

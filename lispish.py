@@ -6,6 +6,18 @@ LispIsh - a simple lisp-like language.
 >>> expression.evaluate({ 'XOR': lambda v: v[0] ^ v[1] })
 3
 
+Some functions are built in. See the _defaults dict below for which ones.
+
+>>> expression = compiler.parse('(= 5 6)')
+>>> expression.evaluate({})
+False
+>>> expression = compiler.parse('(<= 5 6 7)')
+>>> expression.evaluate({})
+True
+>>> expression = compiler.parse('(- 5 (- 1))')
+>>> expression.evaluate({})
+6
+
 Errors may be raised when parsing or when evaluating. If the parse string is
 not valid, an instance of LispIshParseError will be raised. When evaluating,
 if a function does not exist, an instance of LispIshRuntimeError will be raised.
@@ -27,6 +39,7 @@ This is used to store the internal representation of challenge requirements.
 from typing import List, Dict, Callable, Union, NoReturn
 import json
 import string
+from functools import wraps
 
 LispIshTypes = Union[str, int, bool]
 LispIshMethods = Dict[str, Callable[[List[LispIshTypes]], LispIshTypes]]
@@ -34,11 +47,11 @@ LispIshMethods = Dict[str, Callable[[List[LispIshTypes]], LispIshTypes]]
 def _get_indent(size: int) -> str:
     """ Helper to get indented code
     >>> _get_indent(1)
-    '\\t'
+    '    '
     >>> _get_indent(2)
-    '\\t\\t'
+    '        '
     """
-    return '\t' * size
+    return '    ' * size
 
 class LispIshError(Exception):
     """ Base class for errors raised by this module """
@@ -117,6 +130,10 @@ class LispIshMethod(LispIshValue):
             return function_map[self.canonical_name]([
                 arg.evaluate(function_map) for arg in self.args
             ])
+        if self.canonical_name in _defaults:
+            return _defaults[self.canonical_name]([
+                arg.evaluate(function_map) for arg in self.args
+            ])
         raise LispIshRuntimeError(f"The method <{self.name}> is not defined.")
 
     def emit(self, indent: int = 0) -> str:
@@ -138,6 +155,125 @@ class LispIshMethod(LispIshValue):
             *[arg.emit(indent + 1) for arg in self.args[:-1]],
             f"{self.args[-1].emit(indent + 1)})"
         ])
+
+def _assertArgs(arg, num: int, name: str):
+    if len(arg) < num:
+        raise LispIshRuntimeError(f"({name}) was passed {len(arg)} arguments, expected at least {num}.")
+
+def _notFn(arg) -> bool:
+    if len(arg) != 1:
+        raise LispIshRuntimeError(f"(not) function was passed {len(arg)} arguments, expected 1.")
+    return not arg[0]
+
+# Note: Not limited to numbers.
+def _eqFn(arg) -> bool:
+    _assertArgs(arg, 2, '=')
+    return len(set(arg)) == 1
+
+def _neqFn(arg) -> bool:
+    """ Checks if every arg is distinct from every other arg.
+    >>> _neqFn([1, 2, 3])
+    True
+    >>> _neqFn([1, 2, 1])
+    False
+    """
+    _assertArgs(arg, 2, '/=')
+    return len(set(arg)) == len(arg)
+
+def _gtFn(arg) -> bool:
+    """ Checks if each arg is smaller than the previous.
+    >>> _gtFn([3, 2, 1])
+    True
+    >>> _gtFn([3, 1, 2])
+    False
+    """
+    _assertArgs(arg, 2, '>')
+    for i in range(1, len(arg)):
+        if arg[i - 1] <= arg[i]:
+            return False
+    return True
+
+def _ltFn(arg) -> bool:
+    """ Checks if each arg is greater than the previous.
+    >>> _ltFn([1, 2, 3])
+    True
+    >>> _ltFn([1, 3, 2])
+    False
+    """
+    _assertArgs(arg, 2, '<')
+    for i in range(1, len(arg)):
+        if arg[i - 1] >= arg[i]:
+            return False
+    return True
+
+def _geqFn(arg) -> bool:
+    """ Checks if each arg is less than or equal to the previous arg.
+    >>> _geqFn([2, 2, 1])
+    True
+    >>> _geqFn([3, 2, 1])
+    True
+    >>> _geqFn([1, 2])
+    False
+    """
+    _assertArgs(arg, 2, '>=')
+    for i in range(1, len(arg)):
+        if arg[i - 1] < arg[i]:
+            return False
+    return True
+
+def _leqFn(arg) -> bool:
+    """ Checks if each arg is greater than or equal to the previous arg.
+    >>> _leqFn([1, 1, 2])
+    True
+    >>> _leqFn([1, 2, 1])
+    False
+    """
+    _assertArgs(arg, 2, '<=')
+    for i in range(1, len(arg)):
+        if arg[i - 1] > arg[i]:
+            return False
+    return True
+
+def _diffFn(arg) -> bool:
+    """ Takes the difference of each argument.
+    >>> _diffFn([1, 2, 3])
+    -4
+    >>> _diffFn([5, 1, -1])
+    5
+    >>> _diffFn([1])
+    -1
+    """
+    _assertArgs(arg, 1, '-')
+    if len(arg) == 1:
+        return -arg[0]
+    result = arg[0]
+    for item in arg[1:]:
+        result -= item
+    return result
+
+def _maxFn(arg) -> bool:
+    _assertArgs(arg, 1, 'max')
+    return max(arg)
+
+def _minFn(arg) -> bool:
+    _assertArgs(arg, 1, 'min')
+    return min(arg)
+
+_defaults = {
+    'NOT': _notFn,
+    'AND': all,
+    'OR': any,
+    '=': _eqFn,
+    '/=': _neqFn,
+    '>': _gtFn,
+    '<': _ltFn,
+    '>=': _geqFn,
+    '<=': _leqFn,
+    '+': sum,
+    '-': _diffFn,
+    'MAX': _maxFn,
+    'MIN': _minFn,
+}
 
 class LispIsh:
     """ Parser for the LispIsh language, which is like lisp, but simpler.
@@ -203,18 +339,14 @@ class LispIsh:
         self._expect(')')
         return LispIshMethod(name, args)
 
-    def _parse_name(self) -> str:
-        """ Parses a LispIsh name, allows ASCII letters or a hyphen, but hyphens
-        may not be the first character in a name.
+    _NAME_CHARS = set(string.ascii_letters + '<=>/+-')
 
-        >>> LispIsh().parse('(-bad)')
-        Traceback (most recent call last):
-            ...
-        LispIshParseError: Expected a name but found <-> at 1:1
+    def _parse_name(self) -> str:
+        """ Parses a LispIsh name, allows ASCII letters, or one of <=>/+-
         """
         self._consume_ws()
         name = []
-        while self._peek() in string.ascii_letters or self._peek() == '-' and name:
+        while self._peek() in LispIsh._NAME_CHARS:
             name.append(self._consume())
         if not name:
             self._die(f"Expected a name but found <{self._peek()}>")

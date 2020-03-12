@@ -88,7 +88,10 @@ $('#nav-tabContent').append(`
                     <div class="form-group">
                         <div id="requirements-editor"></div>
                         <sub>
-                            LispIsh description
+                            You may enter a LispIsh expression here, which will be evaluated to determine
+                            if participants may view the challenge. For information about the available functions
+                            view <a href="https://github.com/Gerrit0/CTFd_unique_challenges/wiki/LispIsh-Documentation" target="_blank">
+                            the wiki page.</a>
                         </sub>
                     </div>
                     <div class="form-group">
@@ -177,7 +180,7 @@ $('#nav-tabContent').append(`
 
     function clearSelectedScript() {
         $('.highlight[gf-id]').removeClass('highlight')
-        editor.setValue('')
+        editor.setValue('', 1)
         $('#script-file-id').val('')
         $('#script-file-name').val('')
         $('#submit-script-files').text('Create')
@@ -199,7 +202,7 @@ $('#nav-tabContent').append(`
                     data: { nonce: CTFd.config.csrfNonce },
                     success: function(response) {
                         if (!row.hasClass('highlight')) return;
-                        editor.setValue(response.script || '')
+                        editor.setValue(response.script || '', 1)
                         $('#script-file-name').val(response.name)
                         $('#script-file-id').attr('value', response.id)
                         $('#submit-script-files').text('Update')
@@ -273,7 +276,7 @@ $('#nav-tabContent').append(`
     $.ajax({
         url: CTFd.config.urlRoot + "/api/unique/requirements/" + CHALLENGE_ID,
         success: function(response) {
-            reqEditor.setValue(response.script)
+            reqEditor.setValue(response.script, 1)
         }
     })
 
@@ -289,7 +292,7 @@ $('#nav-tabContent').append(`
             },
             success: function(response) {
                 if (response.status == 'ok') {
-                    reqEditor.setValue(response.script)
+                    reqEditor.setValue(response.script, 1)
                 } else {
                     alert(response.error)
                 }
