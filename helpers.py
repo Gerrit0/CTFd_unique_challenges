@@ -3,6 +3,7 @@ Contains helper functions for working with the challenge flags.
 """
 
 import sys
+import time
 from io import TextIOWrapper, BytesIO
 import re
 from secrets import token_hex
