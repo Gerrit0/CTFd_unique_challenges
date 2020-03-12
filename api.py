@@ -160,7 +160,7 @@ class GeneratedChallengeFileDownload(Resource):
     """ Allow users to download a given generated challenge file """
     def get(self, challenge_id, file_id):
         """ Handle the get request """
-        if not is_admin() or not ctftime():
+        if not is_admin() and not ctftime():
             abort(403)
         if not meets_advanced_requirements(challenge_id):
             return abort(403)
