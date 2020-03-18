@@ -5,14 +5,15 @@ Contains all of the /api/unique/* routes added by this plugin.
 import io
 
 from flask import request, send_file, abort
+from sqlalchemy import text
 from flask_restplus import Namespace, Resource
-from CTFd.models import db
+from CTFd.models import db, Submissions, Users, Teams
 from CTFd.utils import set_config
 from CTFd.utils.decorators import admins_only
 from CTFd.utils.dates import ctftime
 from CTFd.utils.user import is_admin
 
-from .models import UniqueChallengeFiles, UniqueChallenges, UniqueChallengeScript, UniqueChallengeRequirements
+from .models import UniqueChallengeFiles, UniqueChallenges, UniqueChallengeScript, UniqueChallengeRequirements, UniqueFlags
 from .helpers import get_unique_challenge_file, get_generated_challenge_file, meets_advanced_requirements
 from .lispish import LispIsh, LispIshParseError
 
@@ -215,20 +216,75 @@ class UniqueChallengesConfig(Resource):
         set_config("unique_challenges_filter_list", bool(data.get("filter_list")))
         return dict(status='ok')
 
-@API_NAMESPACE.route("/lispish/parse")
-class LispIshData(Resource):
-    """ Helper to allow users to check that the given lispish is valid. """
-    def post(self):
-        """ Check the submitted code and let the user know if it is valid. """
-        data = request.form or request.get_json()
-        code = data.get('code')
-        if not code or not isinstance(code, str):
-            return dict(
-                success=False,
-                error="You must provide the code parameter with code to try to parse."
-            )
-        try:
-            parsed = LispIsh().parse(code)
-            return dict(success=True, emitted=parsed.emit())
-        except LispIshParseError as error:
-            return dict(success=False, error=str(error))
+@API_NAMESPACE.route("/audit")
+class AuditList(Resource):
+    """ Provides a list of users along with high level audit info. """
+    @admins_only
+    def get(self):
+        # First get all submissions that are suspect. These are submissions which
+        # include a unique flag for that challenge but are marked incorrect.
+        # TODO: SQLAlchemy surely has some way to represent this via the query builder
+        # but I gave up and just used text after an hour banging my head against it...
+        statement = text("""
+            SELECT s.challenge_id, s.id, s.user_id, s.team_id, uf.user_id as ufuid, uf.team_id as uftid FROM submissions AS s
+            JOIN unique_flags AS uf
+                ON uf.challenge_id = s.challenge_id
+                WHERE type = "incorrect"
+                AND (
+                    INSTR(s.provided, uf.flag_8)
+                    OR INSTR(s.provided, uf.flag_16)
+                    OR INSTR(s.provided, uf.flag_32)
+                )
+                AND (
+                    (uf.user_id IS NULL OR uf.user_id <> s.user_id)
+                    AND (uf.team_id IS NULL OR uf.team_id <> s.team_id)
+                )
+        """)
+        # NOTE: We request specific columns here instead of the Submissions/UniqueFlags object because
+        # SQLAlchemy dedupes - https://docs.sqlalchemy.org/en/13/faq/sessions.html#faq-query-deduplicating
+        query = db.session.query(
+            Submissions.challenge_id, Submissions.id,
+            Submissions.user_id, Submissions.team_id,
+            UniqueFlags.user_id.label('ufuid'), UniqueFlags.team_id.label('uftid')
+        ).from_statement(statement)
+
+        suspect = []
+        users = set()
+        teams = set()
+        for (c_id, sub_id, sub_uid, sub_tid, uf_uid, uf_tid) in query:
+            users.add(sub_uid)
+            users.add(uf_uid)
+            teams.add(sub_uid)
+            teams.add(uf_tid)
+
+            challenge = UniqueChallenges.query.filter_by(id=c_id).one()
+            suspect.append(dict(
+                challenge_id=challenge.id,
+                submission_id=sub_id,
+                challenge_name=challenge.name,
+                team_id=sub_tid,
+                source_team=uf_tid,
+                user_id=sub_uid,
+                source_user=uf_uid
+            ))
+
+        users_arr = []
+        for user in users:
+            if user is None:
+                continue
+            db_user = Users.query.filter_by(id=user).one()
+            users_arr.append(dict(id=db_user.id, name=db_user.name))
+
+        teams_arr = []
+        for team in teams:
+            if team is None:
+                continue
+            db_team = Teams.query.filter_by(id=team).one()
+            teams_arr.append(dict(id=db_team.id, name=db_team.name))
+
+        return dict(
+            status='ok',
+            suspect=suspect,
+            users=users_arr,
+            teams=teams_arr
+        )

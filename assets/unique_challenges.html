@@ -8,27 +8,87 @@
     </div>
 </div>
 
+<style>
+    .tab-content {
+        margin-top: 1.5em;
+    }
+</style>
+
+<template id="suspect-info">
+    <tr>
+        <td><a data-text="chal">Challenge</a></td>
+        <td><a data-text="user"></a></td>
+        {% if config.is_teams_mode() %}
+        <td><a data-text="team"></a></td>
+        {% endif %}
+        {% if config.is_users_mode() %}
+        <td><a data-text="copy_user"></a></td>
+        {% else %}
+        <td><a data-text="copy_team"></a></td>
+        {% endif %}
+    </tr>
+</template>
+
 <div class="container">
-    <h3>Settings</h3>
+    <nav class="nav nav-tabs nav-fill">
+        <a class="nav-item nav-link active" data-toggle="tab" href="#auditing" role="tab" aria-selected="true">Auditing</a>
+        <a class="nav-item nav-link" data-toggle="tab" href="#settings" role="tab" aria-selected="false">Settings</a>
+    </nav>
 
-    <form id="unique_challenges_config_form">
-        <div class="form-group form-check">
-            {% if filter_list %}
-            <input type="checkbox" name="filter_list" id="filter_list" checked>
-            {% else %}
-            <input type="checkbox" name="filter_list" id="filter_list">
-            {% endif %}
-            <label for="filter_list">Apply advanced requirements when listing challenges</label>
-            <br>
-            <small class="form-text text-muted">
-                This may cause performance issues with CTFs with many challenges. <br>
-                If not set, advanced requirements will be applied when a user views a challenge.
-            </small>
+    <div class="tab-content" role="tabpanel" id="nav-tabContent">
+        <div class="tab-pane fade active show" id="auditing">
+            <form>
+                <div class="form-group row">
+                    <label for="audit-grouping" class="col-sm-2 col-form-label">Group events by:</label>
+                    <select class="form-control col-sm-10" id="audit-grouping">
+                        <option value="challenge">Challenge</option>
+                        <option value="submit">Submitting Team/User</option>
+                        <option value="copied">Copied Team/User</option>
+                    </select>
+                </div>
+            </form>
+
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Challenge</th>
+                        <th>Submitting User</th>
+                        {% if config.is_teams_mode() %}
+                        <th>Submitting Team</th>
+                        {% endif %}
+                        {% if config.is_users_mode() %}
+                        <th>Copied User</th>
+                        {% else %}
+                        <th>Copied Team</th>
+                        {% endif %}
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
         </div>
+        <div class="tab-pane fade" id="settings">
+            <h3>Settings</h3>
 
-        <input value="{{ nonce }}" name="nonce" hidden>
-        <button type="submit" class="btn btn-primary" id="config_form_submit">Save</button>
-    </form>
+            <form id="unique_challenges_config_form">
+                <div class="form-group form-check">
+                    {% if filter_list %}
+                    <input type="checkbox" name="filter_list" id="filter_list" checked>
+                    {% else %}
+                    <input type="checkbox" name="filter_list" id="filter_list">
+                    {% endif %}
+                    <label for="filter_list">Apply advanced requirements when listing challenges</label>
+                    <br>
+                    <small class="form-text text-muted">
+                        This may cause performance issues with CTFs with many challenges. <br>
+                        If not set, advanced requirements will be applied when a user views a challenge.
+                    </small>
+                </div>
+
+                <input value="{{ nonce }}" name="nonce" hidden>
+                <button type="submit" class="btn btn-primary" id="config_form_submit">Save</button>
+            </form>
+        </div>
+    </div>
 </div>
 
 {% endblock %}

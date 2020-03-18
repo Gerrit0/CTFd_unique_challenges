@@ -24,8 +24,11 @@ class UniqueFlags(db.Model):
     flag_16 = db.Column(db.String(16))
     flag_32 = db.Column(db.String(32))
 
+    user = db.relationship("Users", foreign_keys="UniqueFlags.user_id", lazy="select")
+    team = db.relationship("Teams", foreign_keys="UniqueFlags.team_id", lazy="select")
+
     def __repr__(self):
-        return f"<UniqueFlag {self.content} for challenge {self.challenge_id}>"
+        return f"<UniqueFlag {self.id} for challenge {self.challenge_id}>"
 
 
 class UniqueChallenges(Challenges):
