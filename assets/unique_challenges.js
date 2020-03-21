@@ -50,24 +50,75 @@ $.ajax({
     }
 })
 
-const sorters = {
-    challenge: function () {
-        return 0
-    },
-    submit: function () {
-        return 0
-    },
-    copied: function () {
-        return 0
+/**
+ * @template T
+ * @typedef Sorter
+ * @property {(a: T, b: T) => number} run
+ * @property {(fn: (a: T, b: T) => boolean) => Sorter<T>} thenBy
+ */
+
+/**
+ * Simple sort helper because I find sort predicates that return a boolean easier to reason about.
+ * @template T
+ * @param {(a: T, b: T) => boolean} fn
+ * @returns {Sorter<T>}
+ */
+function sort(fn) {
+    return {
+        run: function(a, b) {
+            if (fn(a, b)) {
+                return -1
+            }
+            if (fn(b, a)) {
+                return 1
+            }
+            return 0
+        },
+        thenBy: function(next) {
+            return sort(function (a, b) {
+                if (fn(a, b)) {
+                    return true
+                }
+                if (fn(b, a)) {
+                    return false
+                }
+                return next(a, b)
+            })
+        }
     }
+}
+
+/** @type {Record<string, Sorter<Suspect>>} */
+const sorters = {
+    challenge: sort(function (a, b) {
+        return a.challenge_name < b.challenge_name
+    }).thenBy(function (a, b) {
+        return users.get(a.user_id) < users.get(b.user_id)
+    }),
+    submit: sort(function(a, b) {
+        if (a.team_id != null) {
+            return teams.get(a.team_id) < teams.get(b.team_id)
+        }
+        return users.get(a.user_id) < users.get(b.user_id)
+    }).thenBy(function(a, b) {
+        return a.challenge_name < b.challenge_name
+    }),
+    copied: sort(function(a, b) {
+        if (a.source_team != null) {
+            return teams.get(a.source_team) < teams.get(b.source_team)
+        }
+        return false // Sort by users
+    }).thenBy(function(a, b) {
+        return users.get(a.source_user) < users.get(b.source_user)
+    })
 }
 
 const template = $(/** @type {HTMLTemplateElement} */($('#suspect-info')[0]).content)
 
 $('#audit-grouping').change(rebuildAudit)
 function rebuildAudit() {
-    const sorter = $('#audit-grouping').val()
-    sorters[sorter](suspects)
+    const sorter = /** @type {string} */ ($('#audit-grouping').val())
+    suspects.sort(sorters[sorter].run)
 
     $('#auditing tbody').children().remove()
     for (const suspect of suspects) {
@@ -88,5 +139,8 @@ function rebuildAudit() {
             .attr('href', '/admin/teams/' + suspect.source_team)
             .text(teams.get(suspect.source_team))
         $('#auditing tbody').append(sTempl)
+    }
+    if (!suspects.length) {
+        $('#auditing tbody').append('No audit events found.')
     }
 }

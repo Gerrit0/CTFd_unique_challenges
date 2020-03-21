@@ -254,7 +254,7 @@ class AuditList(Resource):
         for (c_id, sub_id, sub_uid, sub_tid, uf_uid, uf_tid) in query:
             users.add(sub_uid)
             users.add(uf_uid)
-            teams.add(sub_uid)
+            teams.add(sub_tid)
             teams.add(uf_tid)
 
             challenge = UniqueChallenges.query.filter_by(id=c_id).one()
