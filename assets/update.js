@@ -83,7 +83,9 @@ $('#nav-tabContent').append(`
     <div class="row">
         <div class="col-md-12">
             <h3 class="text-center py-3 d-block">Advanced Requirements</h3>
-            <div class="col-md-12 mt-3">
+            <input type="checkbox" data-toggle="code"><span>Show Code</span>
+
+            <div class="col-md-12 mt-3" data-show="code:checked">
                 <form id="advanced-requirements-form" method="POST">
                     <div class="form-group">
                         <div id="requirements-editor"></div>
@@ -98,6 +100,11 @@ $('#nav-tabContent').append(`
                         <button class="btn btn-success float-right" id="submit-advanced-requirements">Save</button>
                     </div>
                 </form>
+            </div>
+
+            <div class="col-md-12 mt-3" data-show="code:unchecked">
+                <div id="advanced_requirements_gui"></div>
+                <button class="btn btn-success float-right" id="submit-advanced-requirements-gui">Save</button>
             </div>
         </div>
     </div>
@@ -269,7 +276,6 @@ $('#nav-tabContent').append(`
         }
     })
 
-    /// Advanced Requirements
     const reqEditor = ace.edit("requirements-editor");
     reqEditor.session.setMode("ace/mode/lisp");
 
@@ -277,6 +283,7 @@ $('#nav-tabContent').append(`
         url: CTFd.config.urlRoot + "/api/unique/requirements/" + CHALLENGE_ID,
         success: function(response) {
             reqEditor.setValue(response.script, 1)
+            buildGui(response.script)
         }
     })
 
@@ -299,4 +306,100 @@ $('#nav-tabContent').append(`
             }
         })
     });
+
+    const guiRoot = $('#advanced_requirements_gui')
+    const blockTemplate = $($('#block_template')[0].content)
+
+    guiRoot.click(function(event) {
+        const target = event.target
+        const block = target.parentElement.parentElement
+        if (target.dataset.action === 'add-arg') {
+            const args = block.querySelector('.args')
+            $(args).append(blockTemplate.clone())
+        } else if (target.dataset.action === 'remove-arg') {
+            block.remove()
+        }
+    })
+
+    guiRoot.change(function(event) {
+        const target = event.target
+        if (target instanceof HTMLSelectElement && target.dataset.switch === "type") {
+            switch (target.value) {
+                case "check":
+                target.parentElement.parentElement.classList.add('call')
+                break
+            case "string":
+            case "number":
+                target.parentElement.parentElement.classList.remove('call')
+                break
+            }
+        }
+    })
+
+    // Advanced requirements GUI
+    /** @param {string} script */
+    function buildGui(script) {
+        const lisp = new LispIsh()
+        try {
+            const method = lisp.parse(script || '(=)')
+            buildFromValue(method, guiRoot[0])
+        } catch (error) {
+            guiRoot.append('Error parsing script: ' + error)
+            guiRoot.append('Check the show code box and fix errors.')
+        }
+    }
+
+
+    /** @type {(value: LispIshValue, parent: HTMLElement) => void} */
+    function buildFromValue(value, parent) {
+        const block = blockTemplate.clone()
+        if (value instanceof LispIshMethod) {
+            block.find('[data-switch="type"]').val('check')
+            block.find('[data-switch="method"]').val(value.canonical_name)
+            const args = block[0].querySelector('.args')
+            value.args.forEach(function(arg) {
+                buildFromValue(arg, args)
+            })
+        } else if (value instanceof LispIshNumber) {
+            block.find('.block').removeClass('call')
+            block.find('[data-switch="type"]')[0].value = 'number'
+            block.find('input')[0].value = value.value
+        } else if (value instanceof LispIshString) {
+            block.find('.block').removeClass('call')
+            block.find('[data-switch="type"]')[0].value = 'string'
+            block.find('input')[0].value = value.value
+        }
+        $(parent).append(block)
+    }
 }())
+
+// We know a bit more about what is allowed for LispIsh than the language itself lets on
+// https://github.com/Gerrit0/CTFd_unique_challenges/wiki/LispIsh-Documentation
+
+// Generic container GUI, we don't have to do anything special.
+// Method => (min, max?), inclusive.
+// TODO: Use this to warn the user if they provide bad args
+const METHOD_MAP = {
+    '=': [2],
+    '/=': [2],
+    'and': [0],
+    'or': [0],
+    'not': [1, 1],
+    '+': [0],
+    '-': [1],
+    'max': [1],
+    'min': [1],
+    '>': [2],
+    '>=': [2],
+    '<': [2],
+    '<=': [2],
+    'user-email': [0, 0],
+    'user-name': [0, 0],
+    'user-id': [0, 0],
+    'user-score': [0, 0],
+    // TODO: These should really get their own gui
+    'completed': [0],
+    'before': [1, 1],
+    'after': [1, 1]
+}
+

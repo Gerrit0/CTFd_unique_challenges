@@ -319,7 +319,7 @@ class LispIsh:
 
     def _expect(self, text: str) -> str:
         if self._peek() != text:
-            self._die(f"Expected <{text}> but found <{self.text[self.index]}>")
+            self._die(f"Expected <{text}> but found <{self._peek()}>")
         return self._consume()
 
     def _expect_eof(self):
@@ -363,7 +363,7 @@ class LispIsh:
             elif self._peek() in '"\'':
                 args.append(self._parse_str())
             else:
-                self._die("Expected a string, number, or function call but got <{self._peek()>")
+                self._die(f"Expected a string, number, or function call but got <{self._peek()}>")
             self._consume_ws()
         return args
 
