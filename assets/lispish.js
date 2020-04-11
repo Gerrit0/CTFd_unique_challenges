@@ -1,3 +1,4 @@
+//@ts-check
 // Note: This file is almost direct translation of lispish.py
 // It skips the runtime since code won't be run on the client.
 // Ideally this would be a module, but that's blocked on https://github.com/CTFd/CTFd/issues/1304
@@ -71,6 +72,12 @@ class LispIshMethod extends LispIshValue {
         this.name = name
         this.canonical_name = name.toUpperCase()
         this.args = args
+    }
+
+    /** @param {string} name */
+    rename(name) {
+        this.name = name
+        this.canonical_name = name.toUpperCase()
     }
 
     emit(indent = 0) {

@@ -37,69 +37,7 @@
     #advanced_requirements_gui {
         margin-bottom: 1em;
     }
-
-    #advanced_requirements .block {
-        display: grid;
-        grid-template-rows: 30px 1fr;
-    }
-    #advanced_requirements .block .block-header {
-        display: flex;
-    }
-    #advanced_requirements .block.call > .when-value,
-    #advanced_requirements .block.call > .block-header .when-value {
-        display: none;
-    }
-    #advanced_requirements .block:not(.call) > .when-call,
-    #advanced_requirements .block:not(.call) > .block-header .when-call {
-        display: none;
-    }
-    #advanced_requirements .block input, .block [data-switch="method"] {
-        flex-grow: 1;
-    }
-    #advanced_requirements .block .args {
-        margin-left: 5px;
-        border-left: 1px solid black;
-        padding-left: 4px;
-    }
 </style>
-
-<template id="block_template">
-    <div class="block call">
-        <div class="block-header">
-            <select data-switch="type">
-                <option value="check">Check</option>
-                <option value="string">String</option>
-                <option value="number">Number</option>
-            </select>
-            <select class="when-call" data-switch="method">
-                <option value="=">Equal (=)</option>
-                <option value="/=">Not equal (/=)</option>
-                <option value="AND">And</option>
-                <option value="OR">Or</option>
-                <option value="NOT">Not</option>
-                <option value="+">Add</option>
-                <option value="-">Subtract</option>
-                <option value="MAX">Max</option>
-                <option value="MIN">Min</option>
-                <option value=">">Greater than (&gt;)</option>
-                <option value=">=">Greater than or equal to (&ge;)</option>
-                <option value="<">Less than (&lt;)</option>
-                <option value="<=">Less than or equal to (&le;)</option>
-                <option value="USER-EMAIL">User email</option>
-                <option value="USER-NAME">User name</option>
-                <option value="USER-ID">User id</option>
-                <option value="USER-SCORE">User score</option>
-                <option value="COMPLETED">Completed Challenges</option>
-                <option value="BEFORE">Current time is before</option>
-                <option value="AFTER">Current time is after</option>
-            </select>
-            <input class="when-value">
-            <button class="when-call" data-action="add-arg">+</button>
-            <button data-action="remove-arg">&times;</button>
-        </div>
-        <div class="args when-call"></div>
-    </div>
-</template>
 
 <form method="POST">
     <div class="form-group">
@@ -179,3 +117,14 @@
         </td>
     </tr>
 </template>
+
+<script>
+    // Styles
+    void function () {
+        const root = `{{ get_config('APPLICATION_ROOT') or '' }}`
+        const link = document.createElement('link')
+        link.rel = 'stylesheet'
+        link.href = root + '/plugins/unique_challenges/assets/update.css?v=' + Date.now()
+        document.head.appendChild(link)
+    }()
+</script>

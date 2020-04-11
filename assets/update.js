@@ -1,4 +1,6 @@
-
+/// <reference path="./globals.d.ts" />
+/// <reference path="./lispish.js" />
+//@ts-check
 
 $('#challenge-properties').append('<a class="nav-item nav-link" data-toggle="tab" href="#unique_files" role="tab">Unique Files</a>');
 $('#nav-tabContent').append(`
@@ -103,7 +105,9 @@ $('#nav-tabContent').append(`
             </div>
 
             <div class="col-md-12 mt-3" data-show="code:unchecked">
-                <div id="advanced_requirements_gui"></div>
+                <div id="advanced_requirements_gui">
+                <button class="remove">remove</button>
+                </div>
                 <button class="btn btn-success float-right" id="submit-advanced-requirements-gui">Save</button>
             </div>
         </div>
@@ -308,41 +312,291 @@ $('#nav-tabContent').append(`
     });
 
     const guiRoot = $('#advanced_requirements_gui')
-    const blockTemplate = $($('#block_template')[0].content)
 
-    guiRoot.click(function(event) {
-        const target = event.target
-        const block = target.parentElement.parentElement
-        if (target.dataset.action === 'add-arg') {
-            const args = block.querySelector('.args')
-            $(args).append(blockTemplate.clone())
-        } else if (target.dataset.action === 'remove-arg') {
-            block.remove()
-        }
+    let removing = false
+
+    guiRoot.find('.remove').click(function (event) {
+        removing = !removing
+        guiRoot.find('.remove').toggleClass('active')
+        document.body.classList.toggle('removing')
     })
 
     guiRoot.change(function(event) {
         const target = event.target
-        if (target instanceof HTMLSelectElement && target.dataset.switch === "type") {
-            switch (target.value) {
-                case "check":
-                target.parentElement.parentElement.classList.add('call')
-                break
-            case "string":
-            case "number":
-                target.parentElement.parentElement.classList.remove('call')
-                break
+        if (target instanceof HTMLSelectElement) {
+            const parent = target.parentElement
+            let value = LISPISH_VALUE_CACHE.get(parent)
+            if (!value) {
+                throw new Error('Failed to get a value from LISPISH_VALUE_CACHE')
             }
+            if (value instanceof LispIshMethod && target.value !== 'string' && target.value !== 'number') {
+                value.rename(target.value)
+            } else {
+                if (target.value === 'string') {
+                    value = new LispIshString(value.emit(0))
+                } else if (target.value === 'number') {
+                    value = new LispIshNumber(+value.emit(0) || 0)
+                } else {
+                    value = new LispIshMethod(target.value, [value])
+                }
+            }
+            const replace = buildFromValue(value)
+            parent.replaceWith(replace)
+            updateBlockSizeFromChildren(replace.parentElement)
         }
     })
 
+    guiRoot.click(ev => {
+        if (removing && ev.target && ev.target.classList.contains('removing')) {
+            ev.target.remove()
+            // Rebuild
+        }
+        if (!ev.target || !ev.target.classList.contains('big')) return
+        if (ev.offsetX < 18 && ev.offsetY < 18) {
+            ev.target.classList.toggle('collapsed')
+        }
+    })
+
+    /** @type {Element | undefined | null} */
+    let prev
+    guiRoot[0].addEventListener('mousemove', ev => {
+        if (!removing) return
+        let el = document.elementFromPoint(ev.clientX, ev.clientY)
+        while (el && !el.classList.contains('block')) {
+            el = el.parentElement
+        }
+
+        if (prev === el) return
+
+        if (prev) prev.classList.remove('removing')
+        prev = null
+
+        if (el && el.classList.contains('block')) {
+          prev = el
+          el.classList.add('removing')
+        }
+    }, { passive: true })
+
     // Advanced requirements GUI
+    /** @type {[string, string][]} */
+    const TYPES = [
+        ['number', 'Number'],
+        ['string', 'String'],
+        ['=', '='],
+        ['/=', '&ne;'],
+        ['and', 'and'],
+        ['or', 'or'],
+        ['+', '+'],
+        ['-', '-'],
+        ['max', 'max'],
+        ['min', 'min'],
+        ['>', '>'],
+        ['>=', '&ge;'],
+        ['<', '&lt;'],
+        ['<=', '&le;'],
+        ['user-email', 'User email'],
+        ['user-name', 'User name'],
+        ['user-id', 'User id'],
+        ['user-score', 'User score'],
+        // TODO:
+        // not, completed, before, after
+    ]
+
+    // Rules:
+    // A block can be tiny only if it has one or two children
+    // A block can be small only if all of its children are tiny
+    // A block is big if it is neither tiny nor small
+    // Big blocks may not have tiny children
+    /** @type {(children: HTMLElement[]) => string} */
+    function getSizeClass(children) {
+        if (children.length <= 2) {
+            return children.every(child => child.classList.contains('tiny')) ? 'small' : 'big'
+        }
+        return 'big'
+    }
+
+    /** @type {(parentClass: string, children: HTMLElement[]) => void} */
+    function updateBlockClass(parentClass, children) {
+        if (parentClass === 'big') {
+            children.forEach(child => {
+                if (child.classList.contains('tiny')) {
+                    child.classList.remove('tiny')
+                    child.classList.add('small')
+                }
+            })
+        }
+    }
+
+    /** @type {(block: HTMLElement) => void} */
+    function updateBlockSizeFromChildren(block) {
+        const children = /** @type {HTMLElement[]} */ (Array.from(block.children).filter(child => child instanceof HTMLElement))
+        const size = getSizeClass(children)
+        if (block.classList.contains(size)) return
+
+        block.classList.remove('big', 'small', 'tiny')
+        block.classList.add(size)
+        updateBlockClass(size, children)
+    }
+
+    function makeTypeDropdown() {
+        const parent = document.createElement('select');
+        for (const [ val, display ] of TYPES) {
+            const option = document.createElement('option')
+            option.value = val
+            option.innerHTML = display
+            parent.appendChild(option)
+        }
+        return parent
+    }
+
+    /** @type {(children: HTMLElement[], method: string, display?: string) => HTMLElement} */
+    function makeInfixBlock(children, method, display = method) {
+        const sizeClass = getSizeClass(children)
+        updateBlockClass(sizeClass, children)
+
+        const parent = document.createElement('div')
+        parent.classList.add('block', sizeClass)
+        parent.appendChild(children[0])
+        parent.appendChild(makeTypeDropdown()).value = method
+        if (children[1]) {
+            parent.appendChild(children[1])
+        }
+        for (const child of children.slice(2)) {
+            const joiner = document.createElement('span')
+            joiner.classList.add('secondary')
+            joiner.innerHTML = display
+            parent.appendChild(joiner)
+            parent.appendChild(child)
+        }
+
+        const addButton = document.createElement('button')
+        addButton.classList.add('add')
+        addButton.innerHTML = display
+        parent.appendChild(addButton)
+
+        return parent
+    }
+
+    /** @type {WeakMap<HTMLElement, LispIshValue>} */
+    const LISPISH_VALUE_CACHE = new WeakMap()
+
+    // We know a bit more about what is allowed for LispIsh than the language itself lets on
+    // https://github.com/Gerrit0/CTFd_unique_challenges/wiki/LispIsh-Documentation
+    // Method => (min, max?), inclusive.
+    /** @type {Record<string, (children: HTMLElement[], value?: LispIshValue) => HTMLElement>} */
+    const FACTORIES = {
+        number: function(_, value = new LispIshNumber(1)) { // [0, 0]
+            const parent = document.createElement('div')
+            parent.classList.add('block', 'tiny')
+            parent.appendChild(makeTypeDropdown()).value = 'number'
+
+            const input = document.createElement('input')
+            input.type = 'number'
+            input.value = value.emit(0)
+            parent.appendChild(input)
+            return parent
+        },
+        string: function(_, value = new LispIshString("")) { // [0, 0]
+            const parent = document.createElement('div')
+            parent.classList.add('block', 'tiny')
+            parent.appendChild(makeTypeDropdown()).value = 'string'
+
+            const input = document.createElement('input')
+            input.value = value.emit(0)
+            parent.appendChild(input)
+            return parent
+        },
+
+        '=': function(children) { // [2, inf)
+            while (children.length < 2) {
+                children.push(buildFromValue(new LispIshNumber(1)))
+            }
+            return makeInfixBlock(children, '=')
+        },
+        '=/': function(children) { // [2, inf)
+            while (children.length < 2) {
+                children.push(buildFromValue(new LispIshNumber(1)))
+            }
+            return makeInfixBlock(children, '=')
+        },
+        'and': function(children, value) { // [0, inf)
+            return makeInfixBlock(children, 'and')
+        },
+        'or': function(children, value) { // [0, inf)
+            return makeInfixBlock(children, 'or')
+        },
+        '+': function(children, value) { // [0, inf)
+            return makeInfixBlock(children, '+')
+        },
+        '-': function(children, value) { // [1, inf)
+            if (children.length < 1) {
+                children.push(buildFromValue(new LispIshNumber(1)))
+            }
+            return makeInfixBlock(children, '-')
+        },
+        // 'max': [1],
+        // 'min': [1],
+        '>': function(children) { // [2, inf)
+            while (children.length < 2) {
+                children.push(buildFromValue(new LispIshNumber(1)))
+            }
+            return makeInfixBlock(children, '>')
+        },
+        '>=': function(children) { // [2, inf)
+            while (children.length < 2) {
+                children.push(buildFromValue(new LispIshNumber(1)))
+            }
+            return makeInfixBlock(children, '>', '&ge;')
+        },
+        '<': function(children) { // [2, inf)
+            while (children.length < 2) {
+                children.push(buildFromValue(new LispIshNumber(1)))
+            }
+            return makeInfixBlock(children, '&lt;')
+        },
+        '<=': function(children) { // [2, inf)
+            while (children.length < 2) {
+                children.push(buildFromValue(new LispIshNumber(1)))
+            }
+            return makeInfixBlock(children, '&le;')
+        },
+        'user-email': function() {
+            const block = document.createElement('div')
+            block.classList.add('block', 'tiny')
+            block.appendChild(makeTypeDropdown()).value = 'user-email'
+            return block
+        },
+        'user-name': function() {
+            const block = document.createElement('div')
+            block.classList.add('block', 'tiny')
+            block.appendChild(makeTypeDropdown()).value = 'user-name'
+            return block
+        },
+        'user-id': function() {
+            const block = document.createElement('div')
+            block.classList.add('block', 'tiny')
+            block.appendChild(makeTypeDropdown()).value = 'user-id'
+            return block
+        },
+        'user-score': function() {
+            const block = document.createElement('div')
+            block.classList.add('block', 'tiny')
+            block.appendChild(makeTypeDropdown()).value = 'user-score'
+            return block
+        },
+        // TODO: These should really get their own gui
+        // 'not': [1, 1],
+        // 'completed': [0],
+        // 'before': [1, 1],
+        // 'after': [1, 1]
+    }
+
     /** @param {string} script */
     function buildGui(script) {
         const lisp = new LispIsh()
         try {
-            const method = lisp.parse(script || '(=)')
-            buildFromValue(method, guiRoot[0])
+            const method = lisp.parse(script || '(= 1 1)')
+            guiRoot.append(buildFromValue(method))
         } catch (error) {
             guiRoot.append('Error parsing script: ' + error)
             guiRoot.append('Check the show code box and fix errors.')
@@ -350,56 +604,23 @@ $('#nav-tabContent').append(`
     }
 
 
-    /** @type {(value: LispIshValue, parent: HTMLElement) => void} */
-    function buildFromValue(value, parent) {
-        const block = blockTemplate.clone()
+    /** @type {(value: LispIshValue) => HTMLElement} */
+    function buildFromValue(value) {
+        /** @type {HTMLElement} */
+        let el;
         if (value instanceof LispIshMethod) {
-            block.find('[data-switch="type"]').val('check')
-            block.find('[data-switch="method"]').val(value.canonical_name)
-            const args = block[0].querySelector('.args')
-            value.args.forEach(function(arg) {
-                buildFromValue(arg, args)
-            })
+            const key = value.name.toLowerCase()
+            const factory = FACTORIES[value.name.toLowerCase()]
+            if (!factory || key === 'number' || key === 'string') {
+                throw new Error(`Tried to create GUI for an unknown method: '${key}'`)
+            }
+            el = factory(value.args.map(buildFromValue), value)
         } else if (value instanceof LispIshNumber) {
-            block.find('.block').removeClass('call')
-            block.find('[data-switch="type"]')[0].value = 'number'
-            block.find('input')[0].value = value.value
+            el = FACTORIES.number([], value)
         } else if (value instanceof LispIshString) {
-            block.find('.block').removeClass('call')
-            block.find('[data-switch="type"]')[0].value = 'string'
-            block.find('input')[0].value = value.value
+            el = FACTORIES.string([], value)
         }
-        $(parent).append(block)
+        LISPISH_VALUE_CACHE.set(el, value)
+        return el
     }
 }())
-
-// We know a bit more about what is allowed for LispIsh than the language itself lets on
-// https://github.com/Gerrit0/CTFd_unique_challenges/wiki/LispIsh-Documentation
-
-// Generic container GUI, we don't have to do anything special.
-// Method => (min, max?), inclusive.
-// TODO: Use this to warn the user if they provide bad args
-const METHOD_MAP = {
-    '=': [2],
-    '/=': [2],
-    'and': [0],
-    'or': [0],
-    'not': [1, 1],
-    '+': [0],
-    '-': [1],
-    'max': [1],
-    'min': [1],
-    '>': [2],
-    '>=': [2],
-    '<': [2],
-    '<=': [2],
-    'user-email': [0, 0],
-    'user-name': [0, 0],
-    'user-id': [0, 0],
-    'user-score': [0, 0],
-    // TODO: These should really get their own gui
-    'completed': [0],
-    'before': [1, 1],
-    'after': [1, 1]
-}
-
