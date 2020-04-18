@@ -281,14 +281,6 @@ $('#nav-tabContent').append(`
     const reqEditor = ace.edit("requirements-editor");
     reqEditor.session.setMode("ace/mode/lisp");
 
-    $.ajax({
-        url: CTFd.config.urlRoot + "/api/unique/requirements/" + CHALLENGE_ID,
-        success: function(response) {
-            reqEditor.setValue(response.script, 1)
-            buildGui(response.script)
-        }
-    })
-
     $('#submit-advanced-requirements').click(function(event) {
         const toggle = /** @type {HTMLInputElement} */ (document.querySelector('#advanced_requirements [data-toggle="code"]'))
         if (!toggle.checked) {
@@ -314,6 +306,31 @@ $('#nav-tabContent').append(`
 
     const guiRoot = $('#advanced_requirements_gui')
 
+    // Load challenges for autocomplete
+    // http://localhost:4000/api/v1/challenges
+    $.ajax({
+        url: CTFd.config.urlRoot + "/api/v1/challenges",
+        success: function(response) {
+            const datalist = document.querySelector('#challenges_autocomplete')
+            if (response.success) {
+                for (const { name, id } of response.data) {
+                    const option = datalist.appendChild(document.createElement('option'))
+                    option.value = name
+                    option.dataset.id = id
+                }
+                $.ajax({
+                    url: CTFd.config.urlRoot + "/api/unique/requirements/" + CHALLENGE_ID,
+                    success: function(response) {
+                        reqEditor.setValue(response.script, 1)
+                        buildGui(response.script)
+                    }
+                })
+            } else {
+                alert('Failed to fetch challenges. Refresh page.')
+            }
+        }
+    });
+
     $('#advanced_requirements [data-toggle]').each(function() {
         const checked = (/** @type {HTMLInputElement} */ (this)).checked ? 'unchecked' : 'checked'
         $(`#advanced_requirements [data-show="${this.dataset.toggle}:${checked}"]`).attr('hidden', 'hidden')
@@ -334,6 +351,8 @@ $('#nav-tabContent').append(`
 
     /** @type {WeakMap<HTMLElement, LispIshValue>} */
     const LISPISH_VALUE_CACHE = new WeakMap()
+    /** @type {HTMLDataListElement} */
+    const challengeAutocomplete = document.querySelector('#challenges_autocomplete')
     let removing = false
 
     guiRoot.find('.remove').click(function () {
@@ -385,6 +404,17 @@ $('#nav-tabContent').append(`
                 value.value = target.value
             } else if (value instanceof LispIshNumber) {
                 value.value = +target.value || 0
+            } else if (value instanceof LispIshMethod && value.canonical_name === 'COMPLETED') {
+                // Prefer IDs if they exist, otherwise use strings.
+                value.args = Array.from(parent.querySelectorAll('input')).map(el => el.value)
+                    .map(name => {
+                        const autoEl = Array.from(challengeAutocomplete.children)
+                            .find(el => el.getAttribute('value') === name)
+                        if (autoEl) {
+                            return new LispIshNumber(+(/** @type {HTMLInputElement} */(autoEl)).dataset.id)
+                        }
+                        return new LispIshString(name)
+                    })
             }
         }
     })
@@ -458,9 +488,10 @@ $('#nav-tabContent').append(`
         ['user-name', 'User name'],
         ['user-id', 'User id'],
         ['user-score', 'User score'],
-        ['not', 'not']
+        ['not', 'not'],
+        ['completed', 'Completed challenges']
         // TODO:
-        // completed, before, after
+        // before, after
     ]
 
     // Rules:
@@ -701,7 +732,41 @@ $('#nav-tabContent').append(`
 
             return block;
         },
-        // 'completed': [0],
+        // Completed is special, arguments can be either strings or values.
+        'completed': function (_, value) { // [0, inf)
+            if (!(value instanceof LispIshMethod)) {
+                throw new Error('Bad factory call.')
+            }
+            const parent = document.createElement('div')
+            parent.classList.add('block', 'big')
+            parent.appendChild(makeTypeDropdown()).value = 'completed'
+
+            const list = document.createElement('ul')
+            for (const arg of value.args) {
+                const input = list.appendChild(document.createElement('input'))
+                input.setAttribute('list', 'challenges_autocomplete')
+                if (arg instanceof LispIshNumber) {
+                    // Lookup in autocomplete
+                    const option = document.querySelector(`#challenges_autocomplete [data-id="${arg.value}"]`)
+                    if (option) {
+                        input.value = (/** @type {HTMLOptionElement} */ (option)).value;
+                    }
+                } else if (arg instanceof LispIshString) {
+                    input.value = arg.value
+                }
+
+                const li = list.appendChild(document.createElement('li'))
+                li.appendChild(input)
+            }
+            parent.appendChild(list)
+
+            const addButton = document.createElement('button')
+            addButton.classList.add('add')
+            addButton.innerHTML = 'challenge'
+            parent.appendChild(addButton)
+
+            return parent
+        },
         // 'before': [1, 1],
         // 'after': [1, 1]
     }

@@ -38,10 +38,6 @@ body.removing {
   margin-left: 6px;
 }
 
-#advanced_requirements_gui .block>select,
-#advanced_requirements_gui .block>.secondary {
-  width: 120px;
-}
 #advanced_requirements_gui .block>.secondary {
   padding-left: 3px;
   color: var(--color-muted);

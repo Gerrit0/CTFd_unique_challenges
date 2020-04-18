@@ -1,7 +1,8 @@
 <!-- Requirements code editing -->
 <script src="https://pagecdn.io/lib/ace/1.4.11/ace.js" crossorigin="anonymous" integrity="sha256-Kr5Mbwq/xwJYw6XU4NR519/iosGvECYMyMU8IZ/rQok=" ></script>
 <!-- Requirements gui editing -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.10.1/Sortable.min.js" integrity="sha256-9D6DlNlpDfh0C8buQ6NXxrOdLo/wqFUwEB1s70obwfE=" crossorigin="anonymous"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <!-- LispIsh helpers -->
 <script src="{{ get_config('APPLICATION_ROOT') or '' }}/plugins/unique_challenges/assets/lispish.js"></script>
 
@@ -108,3 +109,6 @@
         document.head.appendChild(link)
     }()
 </script>
+
+<datalist id="challenges_autocomplete">
+</datalist>
