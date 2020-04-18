@@ -85,36 +85,34 @@ $('#nav-tabContent').append(`
     <div class="row">
         <div class="col-md-12">
             <h3 class="text-center py-3 d-block">Advanced Requirements</h3>
-            <input type="checkbox" data-toggle="code"><span>Show Code</span>
+            <label>
+                <input type="checkbox" data-toggle="code" checked> Show Code
+            </label>
 
             <div class="col-md-12 mt-3" data-show="code:checked">
-                <form id="advanced-requirements-form" method="POST">
-                    <div class="form-group">
-                        <div id="requirements-editor"></div>
-                        <sub>
-                            You may enter a LispIsh expression here, which will be evaluated to determine
-                            if participants may view the challenge. For information about the available functions
-                            view <a href="https://github.com/Gerrit0/CTFd_unique_challenges/wiki/LispIsh-Documentation" target="_blank">
-                            the wiki page.</a>
-                        </sub>
-                    </div>
-                    <div class="form-group">
-                        <button class="btn btn-success float-right" id="submit-advanced-requirements">Save</button>
-                    </div>
-                </form>
+                <div id="requirements-editor"></div>
+                <sub>
+                    You may enter a LispIsh expression here, which will be evaluated to determine
+                    if participants may view the challenge. For information about the available functions
+                    view <a href="https://github.com/Gerrit0/CTFd_unique_challenges/wiki/LispIsh-Documentation" target="_blank">
+                    the wiki page.</a>
+                </sub>
             </div>
 
             <div class="col-md-12 mt-3" data-show="code:unchecked">
                 <div id="advanced_requirements_gui">
-                <button class="remove">remove</button>
+                    <button class="remove">remove</button>
                 </div>
-                <button class="btn btn-success float-right" id="submit-advanced-requirements-gui">Save</button>
+            </div>
+
+            <div class="col-md-12 mt-3">
+                <button class="btn btn-success float-right" id="submit-advanced-requirements">Save</button>
             </div>
         </div>
     </div>
-</div>`);
+</div>`)
 
-(function () {
+;(function () {
     // Derived from core/assets/js/helpers.js upload
     function upload(form, extra, cb) {
         const data = new FormData(form);
@@ -291,8 +289,11 @@ $('#nav-tabContent').append(`
         }
     })
 
-    $('#advanced-requirements-form').submit(function(event) {
-        event.preventDefault();
+    $('#submit-advanced-requirements').click(function(event) {
+        const toggle = /** @type {HTMLInputElement} */ (document.querySelector('#advanced_requirements [data-toggle="code"]'))
+        if (!toggle.checked) {
+            copyToEditor()
+        }
 
         $.ajax({
             url: CTFd.config.urlRoot + "/api/unique/requirements/" + CHALLENGE_ID,
@@ -313,9 +314,29 @@ $('#nav-tabContent').append(`
 
     const guiRoot = $('#advanced_requirements_gui')
 
+    $('#advanced_requirements [data-toggle]').each(function() {
+        const checked = (/** @type {HTMLInputElement} */ (this)).checked ? 'unchecked' : 'checked'
+        $(`#advanced_requirements [data-show="${this.dataset.toggle}:${checked}"]`).attr('hidden', 'hidden')
+    })
+
+    $('#advanced_requirements [data-toggle]').change(ev => {
+        const checked = (/** @type {HTMLInputElement} */ (ev.target)).checked
+        $(`#advanced_requirements [data-show="${ev.target.dataset.toggle}:${checked ? 'checked' : 'unchecked'}"]`).removeAttr('hidden')
+        $(`#advanced_requirements [data-show="${ev.target.dataset.toggle}:${checked ? 'unchecked' : 'checked'}"]`).attr('hidden', 'hidden')
+
+        if (checked) {
+            copyToEditor()
+        } else {
+            guiRoot[0].querySelector('.block').remove()
+            buildGui(reqEditor.getValue())
+        }
+    })
+
+    /** @type {WeakMap<HTMLElement, LispIshValue>} */
+    const LISPISH_VALUE_CACHE = new WeakMap()
     let removing = false
 
-    guiRoot.find('.remove').click(function (event) {
+    guiRoot.find('.remove').click(function () {
         removing = !removing
         guiRoot.find('.remove').toggleClass('active')
         document.body.classList.toggle('removing')
@@ -344,14 +365,51 @@ $('#nav-tabContent').append(`
             parent.replaceWith(replace)
             updateBlockSizeFromChildren(replace.parentElement)
         }
+
+        if (target instanceof HTMLInputElement) {
+            let parent = target.parentElement
+            while (parent && !parent.classList.contains('block')) {
+                parent = parent.parentElement
+            }
+            if (!parent) return
+
+            const value = LISPISH_VALUE_CACHE.get(parent)
+            if (!value) {
+                throw new Error('Failed to get a value from LISPISH_VALUE_CACHE.')
+            }
+
+            if (value instanceof LispIshString) {
+                value.value = target.value
+            } else if (value instanceof LispIshNumber) {
+                value.value = +target.value || 0
+            }
+        }
     })
 
     guiRoot.click(ev => {
-        if (removing && ev.target && ev.target.classList.contains('removing')) {
-            ev.target.remove()
-            // Rebuild
+        if (!ev.target) return
+
+        // Removal
+        if (removing && ev.target.classList.contains('removing')) {
+            const value = LISPISH_VALUE_CACHE.get(ev.target)
+            const parentValue = LISPISH_VALUE_CACHE.get(ev.target.parentElement)
+            if (parentValue instanceof LispIshMethod) { // Should always pass.
+                parentValue.args = parentValue.args.filter(v => v !== value)
+            }
+            ev.target.parentElement.replaceWith(buildFromValue(parentValue))
         }
-        if (!ev.target || !ev.target.classList.contains('big')) return
+
+        // Addition
+        if (ev.target.classList.contains('add')) {
+            const parent = LISPISH_VALUE_CACHE.get(ev.target.parentElement)
+            if (parent instanceof LispIshMethod) { // Should always pass
+                parent.args.push(new LispIshString(""))
+            }
+            ev.target.parentElement.replaceWith(buildFromValue(parent))
+        }
+
+        // Collapsing
+        if (!ev.target.classList.contains('big')) return
         if (ev.offsetX < 18 && ev.offsetY < 18) {
             ev.target.classList.toggle('collapsed')
         }
@@ -371,7 +429,7 @@ $('#nav-tabContent').append(`
         if (prev) prev.classList.remove('removing')
         prev = null
 
-        if (el && el.classList.contains('block')) {
+        if (el && el.classList.contains('block') && el.parentElement !== guiRoot[0]) {
           prev = el
           el.classList.add('removing')
         }
@@ -477,9 +535,6 @@ $('#nav-tabContent').append(`
         return parent
     }
 
-    /** @type {WeakMap<HTMLElement, LispIshValue>} */
-    const LISPISH_VALUE_CACHE = new WeakMap()
-
     // We know a bit more about what is allowed for LispIsh than the language itself lets on
     // https://github.com/Gerrit0/CTFd_unique_challenges/wiki/LispIsh-Documentation
     // Method => (min, max?), inclusive.
@@ -492,7 +547,7 @@ $('#nav-tabContent').append(`
 
             const input = document.createElement('input')
             input.type = 'number'
-            input.value = value.emit(0)
+            input.value = value.emit(0) // Don't need to cast as it isn't wrapped in quotes.
             parent.appendChild(input)
             return parent
         },
@@ -502,7 +557,7 @@ $('#nav-tabContent').append(`
             parent.appendChild(makeTypeDropdown()).value = 'string'
 
             const input = document.createElement('input')
-            input.value = value.emit(0)
+            input.value = /** @type {LispIshString} */(value).value
             parent.appendChild(input)
             return parent
         },
@@ -513,11 +568,11 @@ $('#nav-tabContent').append(`
             }
             return makeInfixBlock(children, '=')
         },
-        '=/': function(children) { // [2, inf)
+        '/=': function(children) { // [2, inf)
             while (children.length < 2) {
                 children.push(buildFromValue(new LispIshNumber(1)))
             }
-            return makeInfixBlock(children, '=')
+            return makeInfixBlock(children, '/=', '&ne;')
         },
         'and': function(children, value) { // [0, inf)
             return makeInfixBlock(children, 'and')
@@ -603,6 +658,10 @@ $('#nav-tabContent').append(`
         }
     }
 
+    function copyToEditor() {
+        const root = /** @type {HTMLElement} */ (guiRoot[0].querySelector('.block'))
+        reqEditor.setValue(LISPISH_VALUE_CACHE.get(root).emit(0), 1)
+    }
 
     /** @type {(value: LispIshValue) => HTMLElement} */
     function buildFromValue(value) {
