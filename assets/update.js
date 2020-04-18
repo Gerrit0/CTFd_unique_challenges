@@ -458,8 +458,9 @@ $('#nav-tabContent').append(`
         ['user-name', 'User name'],
         ['user-id', 'User id'],
         ['user-score', 'User score'],
+        ['not', 'not']
         // TODO:
-        // not, completed, before, after
+        // completed, before, after
     ]
 
     // Rules:
@@ -489,10 +490,26 @@ $('#nav-tabContent').append(`
 
     /** @type {(block: HTMLElement) => void} */
     function updateBlockSizeFromChildren(block) {
-        const children = /** @type {HTMLElement[]} */ (Array.from(block.children).filter(child => child instanceof HTMLElement))
-        const size = getSizeClass(children)
-        if (block.classList.contains(size)) return
+        // We need to traverse the tree, but not go within elements with .block.
+        /** @type {HTMLElement[]} */
+        const children = []
+        // Kind of hacky... I can't simply consume the iterator because whenever I want to
+        // accept a node, I want to reject all descendants.
+        const iter = document.createTreeWalker(block, NodeFilter.SHOW_ELEMENT, {
+            acceptNode(node) {
+                if (node instanceof HTMLElement) {
+                    if (node.classList.contains('block')) {
+                        children.push(node)
+                        return NodeFilter.FILTER_REJECT
+                    }
+                    return NodeFilter.FILTER_SKIP
+                }
+                return NodeFilter.FILTER_SKIP
+            }
+        })
+        while (iter.nextNode()) {}
 
+        const size = getSizeClass(children)
         block.classList.remove('big', 'small', 'tiny')
         block.classList.add(size)
         updateBlockClass(size, children)
@@ -511,11 +528,8 @@ $('#nav-tabContent').append(`
 
     /** @type {(children: HTMLElement[], method: string, display?: string) => HTMLElement} */
     function makeInfixBlock(children, method, display = method) {
-        const sizeClass = getSizeClass(children)
-        updateBlockClass(sizeClass, children)
-
         const parent = document.createElement('div')
-        parent.classList.add('block', sizeClass)
+        parent.classList.add('block')
         parent.appendChild(children[0])
         parent.appendChild(makeTypeDropdown()).value = method
         if (children[1]) {
@@ -534,6 +548,7 @@ $('#nav-tabContent').append(`
         addButton.innerHTML = display
         parent.appendChild(addButton)
 
+        updateBlockSizeFromChildren(parent)
         return parent
     }
 
@@ -608,7 +623,7 @@ $('#nav-tabContent').append(`
         '+': function(children) { // [0, inf)
             return makeInfixBlock(children, '+')
         },
-        '-': function(children, parent) { // [1, inf)
+        '-': function(children) { // [1, inf)
             if (children.length < 1) {
                 children.push(buildFromValue(new LispIshNumber(1)))
             }
@@ -674,8 +689,18 @@ $('#nav-tabContent').append(`
             block.appendChild(makeTypeDropdown()).value = 'user-score'
             return block
         },
-        // TODO: These should really get their own gui
-        // 'not': [1, 1],
+        'not': function(children) { // [1, 1]
+            if (children.length < 1) {
+                children.push(buildFromValue(new LispIshNumber(1)))
+            }
+
+            const block = document.createElement('div')
+            block.appendChild(makeTypeDropdown()).value = 'not'
+            block.classList.add('block', children[0].classList.contains('tiny') ? 'small' : 'big')
+            block.appendChild(children[0])
+
+            return block;
+        },
         // 'completed': [0],
         // 'before': [1, 1],
         // 'after': [1, 1]
