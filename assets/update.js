@@ -346,7 +346,9 @@ $('#nav-tabContent').append(`
         const target = event.target
         if (target instanceof HTMLSelectElement) {
             const parent = getParentBlock(target.parentElement)
+            const grandparentValue = getValue(parent.parentElement)
             let value = getValue(parent)
+            const orig = value
             if (!value) {
                 throw new Error('Failed to get a value from LISPISH_VALUE_CACHE')
             }
@@ -354,12 +356,16 @@ $('#nav-tabContent').append(`
                 value.rename(target.value)
             } else {
                 if (target.value === 'string') {
-                    value = new LispIshString(value.emit(0))
+                    value = new LispIshString(value instanceof LispIshMethod ? '' : (/** @type {LispIshString} */(value)).value.toString())
                 } else if (target.value === 'number') {
                     value = new LispIshNumber(+value.emit(0) || 0)
                 } else {
                     value = new LispIshMethod(target.value, [value])
                 }
+            }
+            if (grandparentValue instanceof LispIshMethod && orig !== value) {
+                grandparentValue.args = grandparentValue.args.filter(arg => arg !== orig)
+                grandparentValue.args.push(value)
             }
             const replace = buildFromValue(value)
             parent.replaceWith(replace)
