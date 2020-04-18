@@ -86,7 +86,7 @@ $('#nav-tabContent').append(`
         <div class="col-md-12">
             <h3 class="text-center py-3 d-block">Advanced Requirements</h3>
             <label>
-                <input type="checkbox" data-toggle="code" checked> Show Code
+                <input type="checkbox" data-toggle="code"> Show Code
             </label>
 
             <div class="col-md-12 mt-3" data-show="code:checked">
@@ -345,8 +345,8 @@ $('#nav-tabContent').append(`
     guiRoot.change(function(event) {
         const target = event.target
         if (target instanceof HTMLSelectElement) {
-            const parent = target.parentElement
-            let value = LISPISH_VALUE_CACHE.get(parent)
+            const parent = getParentBlock(target.parentElement)
+            let value = getValue(parent)
             if (!value) {
                 throw new Error('Failed to get a value from LISPISH_VALUE_CACHE')
             }
@@ -363,14 +363,11 @@ $('#nav-tabContent').append(`
             }
             const replace = buildFromValue(value)
             parent.replaceWith(replace)
-            updateBlockSizeFromChildren(replace.parentElement)
+            updateBlockSizeFromChildren(getParentBlock(replace.parentElement))
         }
 
         if (target instanceof HTMLInputElement) {
-            let parent = target.parentElement
-            while (parent && !parent.classList.contains('block')) {
-                parent = parent.parentElement
-            }
+            let parent = getParentBlock(target.parentElement)
             if (!parent) return
 
             const value = LISPISH_VALUE_CACHE.get(parent)
@@ -392,20 +389,22 @@ $('#nav-tabContent').append(`
         // Removal
         if (removing && ev.target.classList.contains('removing')) {
             const value = LISPISH_VALUE_CACHE.get(ev.target)
-            const parentValue = LISPISH_VALUE_CACHE.get(ev.target.parentElement)
+            const parent = getParentBlock(ev.target.parentElement)
+            const parentValue = getValue(parent)
             if (parentValue instanceof LispIshMethod) { // Should always pass.
                 parentValue.args = parentValue.args.filter(v => v !== value)
             }
-            ev.target.parentElement.replaceWith(buildFromValue(parentValue))
+            parent.replaceWith(buildFromValue(parentValue))
         }
 
         // Addition
         if (ev.target.classList.contains('add')) {
-            const parent = LISPISH_VALUE_CACHE.get(ev.target.parentElement)
-            if (parent instanceof LispIshMethod) { // Should always pass
-                parent.args.push(new LispIshString(""))
+            const parent = getParentBlock(ev.target.parentElement)
+            const parentValue = getValue(parent)
+            if (parentValue instanceof LispIshMethod) { // Should always pass
+                parentValue.args.push(new LispIshString(""))
             }
-            ev.target.parentElement.replaceWith(buildFromValue(parent))
+            parent.replaceWith(buildFromValue(parentValue))
         }
 
         // Collapsing
@@ -419,10 +418,7 @@ $('#nav-tabContent').append(`
     let prev
     guiRoot[0].addEventListener('mousemove', ev => {
         if (!removing) return
-        let el = document.elementFromPoint(ev.clientX, ev.clientY)
-        while (el && !el.classList.contains('block')) {
-            el = el.parentElement
-        }
+        let el = getParentBlock(/** @type {HTMLElement} */ (document.elementFromPoint(ev.clientX, ev.clientY)))
 
         if (prev === el) return
 
@@ -535,6 +531,29 @@ $('#nav-tabContent').append(`
         return parent
     }
 
+    function makeMinMaxBlock(children, method) {
+        const sizeClass = getSizeClass(children)
+        updateBlockClass(sizeClass, children)
+
+        const parent = document.createElement('div')
+        parent.classList.add('block', sizeClass)
+        parent.appendChild(makeTypeDropdown()).value = method
+
+        const list = document.createElement('ul')
+        for (const child of children) {
+            const li = list.appendChild(document.createElement('li'))
+            li.appendChild(child)
+        }
+        parent.appendChild(list)
+
+        const addButton = document.createElement('button')
+        addButton.classList.add('add')
+        addButton.innerHTML = 'value'
+        parent.appendChild(addButton)
+
+        return parent
+    }
+
     // We know a bit more about what is allowed for LispIsh than the language itself lets on
     // https://github.com/Gerrit0/CTFd_unique_challenges/wiki/LispIsh-Documentation
     // Method => (min, max?), inclusive.
@@ -574,23 +593,33 @@ $('#nav-tabContent').append(`
             }
             return makeInfixBlock(children, '/=', '&ne;')
         },
-        'and': function(children, value) { // [0, inf)
+        'and': function(children) { // [0, inf)
             return makeInfixBlock(children, 'and')
         },
-        'or': function(children, value) { // [0, inf)
+        'or': function(children) { // [0, inf)
             return makeInfixBlock(children, 'or')
         },
-        '+': function(children, value) { // [0, inf)
+        '+': function(children) { // [0, inf)
             return makeInfixBlock(children, '+')
         },
-        '-': function(children, value) { // [1, inf)
+        '-': function(children, parent) { // [1, inf)
             if (children.length < 1) {
                 children.push(buildFromValue(new LispIshNumber(1)))
             }
             return makeInfixBlock(children, '-')
         },
-        // 'max': [1],
-        // 'min': [1],
+        'max': function(children) { // [1, inf)
+            if (children.length < 1) {
+                children.push(buildFromValue(new LispIshNumber(1)))
+            }
+            return makeMinMaxBlock(children, 'max')
+        },
+        'min': function(children) { // [1, inf)
+            if (children.length < 1) {
+                children.push(buildFromValue(new LispIshNumber(1)))
+            }
+            return makeMinMaxBlock(children, 'min')
+        },
         '>': function(children) { // [2, inf)
             while (children.length < 2) {
                 children.push(buildFromValue(new LispIshNumber(1)))
@@ -681,5 +710,19 @@ $('#nav-tabContent').append(`
         }
         LISPISH_VALUE_CACHE.set(el, value)
         return el
+    }
+
+    /** @param {HTMLElement} el */
+    function getParentBlock(el) {
+        while (el && !el.classList.contains('block')) {
+            el = el.parentElement
+        }
+
+        return el
+    }
+
+    /** @param {HTMLElement} el */
+    function getValue(el) {
+        return LISPISH_VALUE_CACHE.get(getParentBlock(el) || document.createElement('div'))
     }
 }())
