@@ -36,6 +36,7 @@ body.removing {
 #advanced_requirements_gui .block:not(.big)>.add:not(:first-child),
 #advanced_requirements_gui .block>select:not(:first-child) {
   margin-left: 6px;
+  max-width: calc(100% - 6px);
 }
 
 #advanced_requirements_gui .block>.secondary {

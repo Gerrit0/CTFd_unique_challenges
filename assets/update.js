@@ -344,7 +344,10 @@ $('#nav-tabContent').append(`
         if (checked) {
             copyToEditor()
         } else {
-            guiRoot[0].querySelector('.block').remove()
+            pickers.forEach(picker => picker.destroy())
+            pickers.length = 0
+            const root = guiRoot[0].querySelector('.block')
+            if (root) root.remove()
             buildGui(reqEditor.getValue())
         }
     })
@@ -353,6 +356,8 @@ $('#nav-tabContent').append(`
     const LISPISH_VALUE_CACHE = new WeakMap()
     /** @type {HTMLDataListElement} */
     const challengeAutocomplete = document.querySelector('#challenges_autocomplete')
+
+    const pickers = []
     let removing = false
 
     guiRoot.find('.remove').click(function () {
@@ -415,6 +420,8 @@ $('#nav-tabContent').append(`
                         }
                         return new LispIshString(name)
                     })
+            } else if (value instanceof LispIshMethod && ['BEFORE', 'AFTER'].includes(value.canonical_name)) {
+                value.args = [new LispIshString(parent.querySelector('input').value)]
             }
         }
     })
@@ -486,12 +493,12 @@ $('#nav-tabContent').append(`
         ['<=', '&le;'],
         ['user-email', 'User email'],
         ['user-name', 'User name'],
-        ['user-id', 'User id'],
+        ['user-id', 'User ID'],
         ['user-score', 'User score'],
         ['not', 'not'],
-        ['completed', 'Completed challenges']
-        // TODO:
-        // before, after
+        ['completed', 'Completed challenges'],
+        ['before', 'Before'],
+        ['after', 'After']
     ]
 
     // Rules:
@@ -521,6 +528,8 @@ $('#nav-tabContent').append(`
 
     /** @type {(block: HTMLElement) => void} */
     function updateBlockSizeFromChildren(block) {
+        if (!block) return; // Edited the root node
+
         // We need to traverse the tree, but not go within elements with .block.
         /** @type {HTMLElement[]} */
         const children = []
@@ -606,6 +615,24 @@ $('#nav-tabContent').append(`
         return parent
     }
 
+    /** @type {(method: string, when: string | number) => HTMLElement} */
+    function makeBeforeAfterBlock(method, when) {
+        const block = document.createElement('div')
+        block.appendChild(makeTypeDropdown()).value = method
+        block.classList.add('block', 'small')
+
+        const input = block.appendChild(document.createElement('input'))
+        input.value = when.toString()
+        pickers.push(flatpickr(input, {
+            enableTime: true,
+            dateFormat: "Y-m-d H:i",
+            altInput: true,
+            altFormat: "F j, Y, h:i K"
+        }))
+
+        return block;
+    }
+
     // We know a bit more about what is allowed for LispIsh than the language itself lets on
     // https://github.com/Gerrit0/CTFd_unique_challenges/wiki/LispIsh-Documentation
     // Method => (min, max?), inclusive.
@@ -688,13 +715,13 @@ $('#nav-tabContent').append(`
             while (children.length < 2) {
                 children.push(buildFromValue(new LispIshNumber(1)))
             }
-            return makeInfixBlock(children, '&lt;')
+            return makeInfixBlock(children, '<', '&lt;')
         },
         '<=': function(children) { // [2, inf)
             while (children.length < 2) {
                 children.push(buildFromValue(new LispIshNumber(1)))
             }
-            return makeInfixBlock(children, '&le;')
+            return makeInfixBlock(children, '<=', '&le;')
         },
         'user-email': function() {
             const block = document.createElement('div')
@@ -767,8 +794,32 @@ $('#nav-tabContent').append(`
 
             return parent
         },
-        // 'before': [1, 1],
-        // 'after': [1, 1]
+        'before': function(_, value) { // [1, 1]
+            if (!(value instanceof LispIshMethod)) {
+                throw new Error('Bad factory call.')
+            }
+            if (value.args.length < 1) {
+                value.args.push(new LispIshString('today'))
+            }
+            const arg = value.args[0]
+            if (arg instanceof LispIshNumber || arg instanceof LispIshString) {
+                return makeBeforeAfterBlock('before', arg.value)
+            }
+            throw new Error('before accepts either a string or number as its argument.')
+        },
+        'after': function(_, value) { // [1, 1]
+            if (!(value instanceof LispIshMethod)) {
+                throw new Error('Bad factory call.')
+            }
+            if (value.args.length < 1) {
+                value.args.push(new LispIshString('today'))
+            }
+            const arg = value.args[0]
+            if (arg instanceof LispIshNumber || arg instanceof LispIshString) {
+                return makeBeforeAfterBlock('after', arg.value)
+            }
+            throw new Error('after accepts either a string or number as its argument.')
+        }
     }
 
     /** @param {string} script */
@@ -778,14 +829,20 @@ $('#nav-tabContent').append(`
             const method = lisp.parse(script || '(= 1 1)')
             guiRoot.append(buildFromValue(method))
         } catch (error) {
-            guiRoot.append('Error parsing script: ' + error)
-            guiRoot.append('Check the show code box and fix errors.')
+            const errBlock = guiRoot[0].appendChild(document.createElement('div'))
+            errBlock.classList.add('block', 'big')
+            errBlock.style.whiteSpace = 'pre-wrap'
+            errBlock.textContent += 'Error parsing script: ' + error
+            errBlock.textContent += '\nCheck the show code box and fix errors.'
         }
     }
 
     function copyToEditor() {
         const root = /** @type {HTMLElement} */ (guiRoot[0].querySelector('.block'))
-        reqEditor.setValue(LISPISH_VALUE_CACHE.get(root).emit(0), 1)
+        const value = LISPISH_VALUE_CACHE.get(root)
+        if (value) {
+            reqEditor.setValue(value.emit(0), 1)
+        }
     }
 
     /** @type {(value: LispIshValue) => HTMLElement} */
