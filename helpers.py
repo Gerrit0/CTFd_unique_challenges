@@ -14,7 +14,7 @@ from CTFd.utils import config
 from CTFd.models import db, Solves, Challenges
 
 from .lispish import LispIsh, LispIshParseError, LispIshRuntimeError
-from .models import UniqueFlags, UniqueChallengeRequirements
+from .models import UniqueFlags, UniqueChallengeRequirements, UniqueChallengeCohort, UniqueChallengeCohortMembership
 
 
 def get_flags_for_challenge(challenge_id):
@@ -197,6 +197,19 @@ def meets_advanced_requirements(challenge_id: int, user=None) -> bool:
                 raise LispIshRuntimeError(f"(completed) function was passed an argument that was not a string or int.")
         return True
 
+    def cohort(arg) -> bool:
+        for search in arg:
+            if isinstance(search, str):
+                cohort = UniqueChallengeCohort.query.filter_by(name=search).first()
+                if not cohort or not UniqueChallengeCohortMembership.query.filter_by(user_id=user.id, cohort_id=cohort.id).first():
+                    return False
+            elif isinstance(search, int):
+                if not UniqueChallengeCohortMembership.query.filter_by(user_id=user.id, cohort_id=search).first():
+                    return False
+            else:
+                raise LispIshRuntimeError(f"(cohort) function was passed an argument that was not a string or int.")
+        return True
+
     def before(arg, method='before') -> bool:
         if len(arg) != 1:
             raise LispIshRuntimeError(f"({method}) function was passed {len(arg)} arguments, expected 1.")
@@ -221,6 +234,7 @@ def meets_advanced_requirements(challenge_id: int, user=None) -> bool:
         method = lisp.parse(model.script.decode('utf-8'))
         return method.evaluate({
             'COMPLETED': completed,
+            'COHORT': cohort,
             'BEFORE': before,
             'AFTER': after,
             'USER-EMAIL': lambda _: user.email,

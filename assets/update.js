@@ -308,28 +308,51 @@ $('#nav-tabContent').append(`
 
     // Load challenges for autocomplete
     // http://localhost:4000/api/v1/challenges
-    $.ajax({
-        url: CTFd.config.urlRoot + "/api/v1/challenges",
-        success: function(response) {
-            const datalist = document.querySelector('#challenges_autocomplete')
-            if (response.success) {
-                for (const { name, id } of response.data) {
-                    const option = datalist.appendChild(document.createElement('option'))
-                    option.value = name
-                    option.dataset.id = id
-                }
-                $.ajax({
-                    url: CTFd.config.urlRoot + "/api/unique/requirements/" + CHALLENGE_ID,
-                    success: function(response) {
-                        reqEditor.setValue(response.script, 1)
-                        buildGui(response.script)
+    Promise.all([
+        // Load cohorts for autocomplete
+        $.ajax({
+            url: CTFd.config.urlRoot + "/api/unique/cohorts",
+            success: function(response) {
+                const datalist = document.querySelector('#cohort_autocomplete')
+                if (response.status === 'ok') {
+                    for (const { name, id } of response.cohorts) {
+                        const option = datalist.appendChild(document.createElement('option'))
+                        option.value = name
+                        option.dataset.id = id
                     }
-                })
-            } else {
-                alert('Failed to fetch challenges. Refresh page.')
+                } else {
+                    alert('Failed to fetch cohorts. Refresh page.')
+                    throw 'fail'
+                }
             }
-        }
-    });
+        }),
+        $.ajax({
+            url: CTFd.config.urlRoot + "/api/v1/challenges",
+            success: function(response) {
+                const datalist = document.querySelector('#challenges_autocomplete')
+                if (response.success) {
+                    for (const { name, id } of response.data) {
+                        const option = datalist.appendChild(document.createElement('option'))
+                        option.value = name
+                        option.dataset.id = id
+                    }
+
+                } else {
+                    alert('Failed to fetch challenges. Refresh page.')
+                    throw 'fail'
+                }
+            }
+        })
+    ]).then(() => {
+        $.ajax({
+            url: CTFd.config.urlRoot + "/api/unique/requirements/" + CHALLENGE_ID,
+            success: function(response) {
+                reqEditor.setValue(response.script, 1)
+                buildGui(response.script)
+            }
+        })
+    })
+
 
     $('#advanced_requirements [data-toggle]').each(function() {
         const checked = (/** @type {HTMLInputElement} */ (this)).checked ? 'unchecked' : 'checked'
@@ -356,6 +379,7 @@ $('#nav-tabContent').append(`
     const LISPISH_VALUE_CACHE = new WeakMap()
     /** @type {HTMLDataListElement} */
     const challengeAutocomplete = document.querySelector('#challenges_autocomplete')
+    const cohortAutocomplete = document.querySelector('#cohort_autocomplete')
 
     const pickers = []
     let removing = false
@@ -414,6 +438,17 @@ $('#nav-tabContent').append(`
                 value.args = Array.from(parent.querySelectorAll('input')).map(el => el.value)
                     .map(name => {
                         const autoEl = Array.from(challengeAutocomplete.children)
+                            .find(el => el.getAttribute('value') === name)
+                        if (autoEl) {
+                            return new LispIshNumber(+(/** @type {HTMLInputElement} */(autoEl)).dataset.id)
+                        }
+                        return new LispIshString(name)
+                    })
+            } else if (value instanceof LispIshMethod && value.canonical_name === 'COHORT') {
+                // Prefer IDs if they exist, otherwise use strings.
+                value.args = Array.from(parent.querySelectorAll('input')).map(el => el.value)
+                    .map(name => {
+                        const autoEl = Array.from(cohortAutocomplete.children)
                             .find(el => el.getAttribute('value') === name)
                         if (autoEl) {
                             return new LispIshNumber(+(/** @type {HTMLInputElement} */(autoEl)).dataset.id)
@@ -483,6 +518,15 @@ $('#nav-tabContent').append(`
         ['/=', '&ne;'],
         ['and', 'and'],
         ['or', 'or'],
+        ['not', 'not'],
+        ['user-email', 'User email'],
+        ['user-name', 'User name'],
+        ['user-id', 'User ID'],
+        ['user-score', 'User score'],
+        ['completed', 'Completed challenges'],
+        ['cohort', 'Cohorts'],
+        ['before', 'Before'],
+        ['after', 'After'],
         ['+', '+'],
         ['-', '-'],
         ['max', 'max'],
@@ -491,14 +535,6 @@ $('#nav-tabContent').append(`
         ['>=', '&ge;'],
         ['<', '&lt;'],
         ['<=', '&le;'],
-        ['user-email', 'User email'],
-        ['user-name', 'User name'],
-        ['user-id', 'User ID'],
-        ['user-score', 'User score'],
-        ['not', 'not'],
-        ['completed', 'Completed challenges'],
-        ['before', 'Before'],
-        ['after', 'After']
     ]
 
     // Rules:
@@ -790,6 +826,41 @@ $('#nav-tabContent').append(`
             const addButton = document.createElement('button')
             addButton.classList.add('add')
             addButton.innerHTML = 'challenge'
+            parent.appendChild(addButton)
+
+            return parent
+        },
+        // Cohort is just as special as completed, just a different set of values.
+        'cohort': function (_, value) { // [0, inf)
+            if (!(value instanceof LispIshMethod)) {
+                throw new Error('Bad factory call.')
+            }
+            const parent = document.createElement('div')
+            parent.classList.add('block', 'big')
+            parent.appendChild(makeTypeDropdown()).value = 'cohort'
+
+            const list = document.createElement('ul')
+            for (const arg of value.args) {
+                const input = list.appendChild(document.createElement('input'))
+                input.setAttribute('list', 'cohort_autocomplete')
+                if (arg instanceof LispIshNumber) {
+                    // Lookup in autocomplete
+                    const option = document.querySelector(`#cohort_autocomplete [data-id="${arg.value}"]`)
+                    if (option) {
+                        input.value = (/** @type {HTMLOptionElement} */ (option)).value;
+                    }
+                } else if (arg instanceof LispIshString) {
+                    input.value = arg.value
+                }
+
+                const li = list.appendChild(document.createElement('li'))
+                li.appendChild(input)
+            }
+            parent.appendChild(list)
+
+            const addButton = document.createElement('button')
+            addButton.classList.add('add')
+            addButton.innerHTML = 'cohort'
             parent.appendChild(addButton)
 
             return parent
