@@ -173,17 +173,36 @@ Promise.all([
         if (target instanceof HTMLElement && target.classList.contains('badge-success')) {
             event.preventDefault()
             id = +target.parentElement.dataset.id
-            // build search
             if (cohortSelect.val() === 'cohorts') {
+                $('#users_autocomplete').html('')
+                const cohort_users = getUsersInCohort(id)
+                for (const user of users.filter(u => !cohort_users.includes(u))) {
+                    const el = document.createElement('option')
+                    el.value = user.name
+                    $('#users_autocomplete').append(el)
+                }
                 $('#addUserToCohort').modal('show')
             } else {
+                $('#cohorts_autocomplete').html('')
+                const user_cohorts = new Set(getCohortsHavingUser(id).map(c => c.id))
+                for (const cohort of cohorts.filter(u => !user_cohorts.has(u.id))) {
+                    const el = document.createElement('option')
+                    el.value = cohort.name
+                    $('#cohorts_autocomplete').append(el)
+                }
                 $('#addCohortToUser').modal('show')
+            }
+            return
+        }
+        if (target instanceof HTMLElement && target.classList.contains('badge-danger')) {
+            event.preventDefault()
+            if (confirm("Are you sure? Deleting cohorts cannot be undone.")) {
+                deleteCohort(+target.parentElement.dataset.id)
             }
             return
         }
         if (target instanceof HTMLElement && target.classList.contains('badge')) {
             event.preventDefault()
-            console.log('click!', target)
             id = +target.parentElement.dataset.id
             if (cohortSelect.val() === 'cohorts') {
                 removeUserFromCohort(+target.dataset.id, id)
@@ -208,7 +227,7 @@ Promise.all([
     $('#addCohortToUserButton').click(() => {
         const cohort = cohorts.find(c => c.name === $('#addCohortToUserName').val())
         if (!cohort) {
-            alert("Can't find user to add to cohort")
+            alert("Can't find cohort to add user to")
             return
         }
 
@@ -270,18 +289,40 @@ Promise.all([
         })
     }
 
-    // Inefficient, could be dramatically improved by using a map... but this works for now.
+    function deleteCohort(cohort_id) {
+        const data = new FormData()
+        data.set('id', cohort_id)
+        data.set('nonce', CTFd.config.csrfNonce)
+        $.ajax({
+            url: CTFd.config.urlRoot + "/api/unique/cohorts",
+            data: data,
+            method: 'delete',
+            cache: false,
+            contentType: false,
+            processData: false,
+            success: function(result) {
+                cohorts = cohorts.filter(c => c.id !== cohort_id)
+                mapping = mapping.filter(m => m.cohort_id !== cohort_id)
+                refreshSearch()
+            }
+        })
+    }
+
     function getUsersInCohort(id) {
-        return mapping
+        const uMap = new Map(users.map(u => [u.id, u]))
+        return nameSorted(mapping
             .filter(m => m.cohort_id === id)
-            .map(m => users.find(u => u.id === m.user_id))
-            .sort((a, b) => a.name.localeCompare(b.name, { sensitivity: 'base'}))
+            .map(m => uMap.get(m.user_id)))
     }
     function getCohortsHavingUser(id) {
-        return mapping
+        const cMap = new Map(cohorts.map(c => [c.id, c]))
+        return nameSorted(mapping
             .filter(m => m.user_id === id)
-            .map(m => cohorts.find(c => c.id === m.cohort_id))
-            .sort((a, b) => a.name.localeCompare(b.name, { sensitivity: 'base'}))
+            .map(m => cMap.get(m.cohort_id)))
+    }
+
+    function nameSorted(arr) {
+        return arr.sort((a, b) => a.name.localeCompare(b.name, { sensitivity: 'base'}))
     }
 
     function refreshSearch() {
@@ -289,7 +330,7 @@ Promise.all([
 
         root.html('')
         if (cohortSelect.val() === 'cohorts') {
-            for (const cohort of cohorts) {
+            for (const cohort of nameSorted(cohorts)) {
                 if (!cohort.name.toLowerCase().includes(searchText)) {
                     continue
                 }
@@ -308,14 +349,19 @@ Promise.all([
                 add.textContent = 'add user'
                 add.classList.add('badge', 'badge-success')
                 add.href = '#'
+                const del = el.appendChild(document.createElement('a'))
+                del.textContent = 'delete cohort'
+                del.classList.add('badge', 'badge-danger')
+                del.href = '#'
                 root.append(el)
             }
         } else {
-            for (const user of users) {
+            for (const user of nameSorted(users)) {
                 if (!user.name.toLowerCase().includes(searchText)) {
                     continue
                 }
                 const el = document.createElement('li')
+                el.dataset.id = user.id
                 el.appendChild(document.createElement('span')).textContent = user.name
                 for (const cohort of getCohortsHavingUser(user.id)) {
                     const a = el.appendChild(document.createElement('a'))

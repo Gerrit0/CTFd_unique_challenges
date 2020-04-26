@@ -155,7 +155,7 @@
             <div class="modal-body">
                 <div class="form-group">
                     <label for="addCohortName">User Name</label>
-                    <input class="form-control" id="addUserToCohortName">
+                    <input class="form-control" id="addUserToCohortName" list="users_autocomplete">
                 </div>
             </div>
             <div class="modal-footer">
@@ -178,7 +178,7 @@
             <div class="modal-body">
                 <div class="form-group">
                     <label for="addCohortName">Cohort Name</label>
-                    <input class="form-control" id="addCohortToUserName">
+                    <input class="form-control" id="addCohortToUserName" list="cohorts_autocomplete">
                 </div>
             </div>
             <div class="modal-footer">
@@ -188,6 +188,13 @@
         </div>
     </div>
 </div>
+
+<datalist id="users_autocomplete">
+</datalist>
+
+<datalist id="cohorts_autocomplete">
+</datalist>
+
 
 {% endblock %}
 

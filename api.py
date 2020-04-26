@@ -314,6 +314,7 @@ class Cohorts(Resource):
     def delete(self):
         data = request.form or request.get_json()
         UniqueChallengeCohort.query.filter_by(id=data.get('id')).delete()
+        UniqueChallengeCohortMembership.query.filter_by(cohort_id=data.get('id')).delete()
         db.session.commit()
         return dict(status='ok')
 
