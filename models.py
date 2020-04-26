@@ -74,3 +74,20 @@ class UniqueChallengeRequirements(db.Model):
         db.Integer, db.ForeignKey("challenges.id", ondelete="CASCADE")
     )
     script = db.Column(db.BLOB)
+
+class UniqueChallengeCohort(db.Model):
+    """ Represents a group of users created by an administrator. """
+    __tablename__ = "unique_cohorts"
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(64))
+
+class UniqueChallengeCohortMembership(db.Model):
+    """ Represents a user's membership to a cohort """
+    __tablename__ = "unique_cohorts_members"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id", ondelete="CASCADE")
+    )
+    cohort_id = db.Column(
+        db.Integer, db.ForeignKey("unique_cohorts.id", ondelete="CASCADE")
+    )

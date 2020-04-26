@@ -13,7 +13,7 @@ from CTFd.utils.decorators import admins_only
 from CTFd.utils.dates import ctftime
 from CTFd.utils.user import is_admin
 
-from .models import UniqueChallengeFiles, UniqueChallenges, UniqueChallengeScript, UniqueChallengeRequirements, UniqueFlags
+from .models import UniqueChallengeFiles, UniqueChallenges, UniqueChallengeScript, UniqueChallengeRequirements, UniqueFlags, UniqueChallengeCohort, UniqueChallengeCohortMembership
 from .helpers import get_unique_challenge_file, get_generated_challenge_file, meets_advanced_requirements
 from .lispish import LispIsh, LispIshParseError
 
@@ -288,3 +288,60 @@ class AuditList(Resource):
             users=users_arr,
             teams=teams_arr
         )
+
+@API_NAMESPACE.route("/cohorts")
+class Cohorts(Resource):
+    @admins_only
+    def get(self):
+        return dict(
+            status='ok',
+            cohorts=[
+                dict(id=c.id, name=c.name)
+                for c in UniqueChallengeCohort.query.all()
+            ]
+        )
+
+    @admins_only
+    def post(self):
+        data = request.form or request.get_json()
+        name = data.get('name')
+        cohort = UniqueChallengeCohort(name=name)
+        db.session.add(cohort)
+        db.session.commit()
+        return dict(status='ok', id=cohort.id)
+
+    @admins_only
+    def delete(self):
+        data = request.form or request.get_json()
+        UniqueChallengeCohort.query.filter_by(id=data.get('id')).delete()
+        db.session.commit()
+        return dict(status='ok')
+
+
+@API_NAMESPACE.route("/cohorts/mapping")
+class Cohorts(Resource):
+    @admins_only
+    def get(self):
+        return dict(
+            status='ok',
+            mapping=[
+                dict(id=c.id, user_id=c.user_id, cohort_id=c.cohort_id) for c in UniqueChallengeCohortMembership.query.all()
+            ]
+        )
+
+    @admins_only
+    def post(self):
+        data = request.form or request.get_json()
+        user_id = data.get('user_id')
+        cohort_id = data.get('cohort_id')
+        membership = UniqueChallengeCohortMembership(user_id=user_id, cohort_id=cohort_id)
+        db.session.add(membership)
+        db.session.commit()
+        return dict(status='ok', id=membership.id)
+
+    @admins_only
+    def delete(self):
+        data = request.form or request.get_json()
+        UniqueChallengeCohortMembership.query.filter_by(user_id=data.get('user_id'), cohort_id=data.get('cohort_id')).delete()
+        db.session.commit()
+        return dict(status='ok')

@@ -20,7 +20,9 @@ from CTFd.plugins.unique_challenges.models import (
     UniqueChallengeFiles,
     UniqueChallengeScript,
     UniqueChallengeRequirements,
-    UniqueFlags
+    UniqueFlags,
+    UniqueChallengeCohort,
+    UniqueChallengeCohortMembership,
 )
 
 app = create_app()
@@ -187,11 +189,27 @@ users = [
     'Evelyn',
 ]
 
+cohorts = [
+    'CS 123',
+    'CS 456',
+    'CS 596'
+]
 
 # Create users
 with app.app_context():
     db_users = []
     user_flags = defaultdict(list)
+    db_cohorts = []
+
+    # Create cohorts
+    for name in cohorts:
+        cohort = UniqueChallengeCohort.query.filter_by(name=name).first()
+        if not cohort:
+            cohort = UniqueChallengeCohort(name=name)
+            db.session.add(cohort)
+        db_cohorts.append(cohort)
+
+    db.session.commit()
 
     for name in users:
         email = f'{name.lower()}@fake-email.fake'
@@ -220,6 +238,18 @@ with app.app_context():
                 )
                 db.session.add(flags)
             user_flags[user.id].append(flags)
+
+        # And add users to cohorts
+        rand = random.getrandbits(2)
+        if rand != 3:
+            if not UniqueChallengeCohortMembership.query.filter_by(user_id=user.id, cohort_id=db_cohorts[rand].id).first():
+                membership = UniqueChallengeCohortMembership(user_id=user.id, cohort_id=db_cohorts[rand].id)
+                db.session.add(membership)
+        rand2 = random.getrandbits(2)
+        if rand2 != 3 and rand2 != rand:
+            if not UniqueChallengeCohortMembership.query.filter_by(user_id=user.id, cohort_id=db_cohorts[rand2].id).first():
+                membership = UniqueChallengeCohortMembership(user_id=user.id, cohort_id=db_cohorts[rand2].id)
+                db.session.add(membership)
     db.session.commit()
 
     # Create a bunch of attempts, some cheaty, some not.

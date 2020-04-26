@@ -1,3 +1,4 @@
+declare const $: JQuery;
 declare const CTFd: any;
 declare const CHALLENGE_ID: number;
 declare const ace: any;

@@ -144,3 +144,192 @@ function rebuildAudit() {
         $('#auditing tbody').append('No audit events found.')
     }
 }
+
+
+///// Cohorts /////
+
+
+Promise.all([
+    CTFd.api.get_user_list(),
+    $.ajax({ url: CTFd.config.urlRoot + "/api/unique/cohorts" }),
+    $.ajax({ url: CTFd.config.urlRoot + "/api/unique/cohorts/mapping" })
+]).then(([{data: users}, { cohorts }, { mapping }]) => {
+    const cohortSearch = $('#cohortSearch').on('input', refreshSearch)
+    const cohortSelect = $('#cohortSelect').change(refreshSearch)
+    const root = $('#cohortData')
+    refreshSearch()
+
+    let id = 0
+
+    $('#addCohortButton').click(() => {
+        $('#addCohort').modal('hide')
+        const input = $('#addCohortName')
+        addCohort(input.val())
+        input.val('')
+    })
+
+    root.click(event => {
+        const target = event.target
+        if (target instanceof HTMLElement && target.classList.contains('badge-success')) {
+            event.preventDefault()
+            id = +target.parentElement.dataset.id
+            // build search
+            if (cohortSelect.val() === 'cohorts') {
+                $('#addUserToCohort').modal('show')
+            } else {
+                $('#addCohortToUser').modal('show')
+            }
+            return
+        }
+        if (target instanceof HTMLElement && target.classList.contains('badge')) {
+            event.preventDefault()
+            console.log('click!', target)
+            id = +target.parentElement.dataset.id
+            if (cohortSelect.val() === 'cohorts') {
+                removeUserFromCohort(+target.dataset.id, id)
+            } else {
+                removeUserFromCohort(id, +target.dataset.id)
+            }
+            target.remove()
+        }
+    })
+
+    $('#addUserToCohortButton').click(() => {
+        const user = users.find(user => user.name === $('#addUserToCohortName').val())
+        if (!user) {
+            alert("Can't find user to add to cohort")
+            return
+        }
+
+        addUserToCohort(user.id, id)
+        $('#addUserToCohort').modal('hide')
+    })
+
+    $('#addCohortToUserButton').click(() => {
+        const cohort = cohorts.find(c => c.name === $('#addCohortToUserName').val())
+        if (!cohort) {
+            alert("Can't find user to add to cohort")
+            return
+        }
+
+        addUserToCohort(id, cohort.id)
+        $('#addCohortToUser').modal('hide')
+    })
+
+    function addCohort(name) {
+        const data = new FormData()
+        data.set('name', name)
+        data.set('nonce', CTFd.config.csrfNonce)
+        $.post({
+            url: CTFd.config.urlRoot + "/api/unique/cohorts",
+            data: data,
+            cache: false,
+            contentType: false,
+            processData: false,
+            success: function(result) {
+                cohorts.push({ name, id: result.id })
+                refreshSearch()
+            }
+        })
+    }
+
+    function addUserToCohort(user_id, cohort_id) {
+        const data = new FormData()
+        data.set('user_id', user_id)
+        data.set('cohort_id', cohort_id)
+        data.set('nonce', CTFd.config.csrfNonce)
+        $.post({
+            url: CTFd.config.urlRoot + "/api/unique/cohorts/mapping",
+            data: data,
+            cache: false,
+            contentType: false,
+            processData: false,
+            success: function(result) {
+                mapping.push({ id: result.id, user_id, cohort_id })
+                refreshSearch()
+            }
+        })
+    }
+
+    function removeUserFromCohort(user_id, cohort_id) {
+        const data = new FormData()
+        data.set('user_id', user_id)
+        data.set('cohort_id', cohort_id)
+        data.set('nonce', CTFd.config.csrfNonce)
+        $.ajax({
+            url: CTFd.config.urlRoot + "/api/unique/cohorts/mapping",
+            data: data,
+            method: 'delete',
+            cache: false,
+            contentType: false,
+            processData: false,
+            success: function(result) {
+                mapping = mapping.filter(m => m.user_id !== user_id || m.cohort_id !== cohort_id)
+                refreshSearch()
+            }
+        })
+    }
+
+    // Inefficient, could be dramatically improved by using a map... but this works for now.
+    function getUsersInCohort(id) {
+        return mapping
+            .filter(m => m.cohort_id === id)
+            .map(m => users.find(u => u.id === m.user_id))
+            .sort((a, b) => a.name.localeCompare(b.name, { sensitivity: 'base'}))
+    }
+    function getCohortsHavingUser(id) {
+        return mapping
+            .filter(m => m.user_id === id)
+            .map(m => cohorts.find(c => c.id === m.cohort_id))
+            .sort((a, b) => a.name.localeCompare(b.name, { sensitivity: 'base'}))
+    }
+
+    function refreshSearch() {
+        const searchText = cohortSearch.val().toLowerCase()
+
+        root.html('')
+        if (cohortSelect.val() === 'cohorts') {
+            for (const cohort of cohorts) {
+                if (!cohort.name.toLowerCase().includes(searchText)) {
+                    continue
+                }
+                const el = document.createElement('li')
+                el.dataset.id = cohort.id
+                el.appendChild(document.createElement('span')).textContent = cohort.name
+
+                for (const user of getUsersInCohort(cohort.id)) {
+                    const a = el.appendChild(document.createElement('a'))
+                    a.href = '#'
+                    a.classList.add('badge', 'badge-secondary')
+                    a.textContent = user.name
+                    a.dataset.id = user.id
+                }
+                const add = el.appendChild(document.createElement('a'))
+                add.textContent = 'add user'
+                add.classList.add('badge', 'badge-success')
+                add.href = '#'
+                root.append(el)
+            }
+        } else {
+            for (const user of users) {
+                if (!user.name.toLowerCase().includes(searchText)) {
+                    continue
+                }
+                const el = document.createElement('li')
+                el.appendChild(document.createElement('span')).textContent = user.name
+                for (const cohort of getCohortsHavingUser(user.id)) {
+                    const a = el.appendChild(document.createElement('a'))
+                    a.href = '#'
+                    a.classList.add('badge', 'badge-secondary')
+                    a.textContent = cohort.name
+                    a.dataset.id = cohort.id
+                }
+                const add = el.appendChild(document.createElement('a'))
+                add.textContent = 'add cohort'
+                add.classList.add('badge', 'badge-success')
+                add.href = '#'
+                root.append(el)
+            }
+        }
+    }
+})
