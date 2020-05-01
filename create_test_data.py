@@ -112,6 +112,13 @@ requirements = [
     ("Python", """(>=
     (user-score)
     10)"""),
+    ("Grep", """(or
+        (before "2020-05-16")
+        (after "2020-05-20")
+    )"""),
+    ("Caesar Cipher", """(and
+        (or (cohort "CS 123") (cohort "CS 456"))
+        (completed 1 2))"""),
     ("Who listens in on Alice and Bob?", """(or
     (=
         (user-name)

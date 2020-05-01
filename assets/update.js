@@ -103,6 +103,11 @@ $('#nav-tabContent').append(`
                 <div id="advanced_requirements_gui">
                     <button class="remove">remove</button>
                 </div>
+                <sub>
+                    For information about what each block does view
+                    <a href="https://github.com/Gerrit0/CTFd_unique_challenges/wiki/Advanced-Requirements" target="_blank">
+                    the wiki page.</a>
+                </sub>
             </div>
 
             <div class="col-md-12 mt-3">
