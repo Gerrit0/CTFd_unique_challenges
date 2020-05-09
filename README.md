@@ -1,6 +1,6 @@
 # Unique Challenges for CTFd
 
-> **Not ready for production use**. This plugin is under active development as an independent study at UCCS.
+> This plugin was developed as part of an independent study at UCCS.
 
 Compatible with CTFd v2.2.3
 
