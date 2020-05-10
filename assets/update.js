@@ -750,7 +750,7 @@ $('#nav-tabContent').append(`
             while (children.length < 2) {
                 children.push(buildFromValue(new LispIshNumber(1)))
             }
-            return makeInfixBlock(children, '>', '&ge;')
+            return makeInfixBlock(children, '>=', '&ge;')
         },
         '<': function(children) { // [2, inf)
             while (children.length < 2) {
